@@ -1,8 +1,9 @@
-# ManuscriptAI
+# ThaalDraft
 
-ManuscriptAI is an AI-powered academic document formatting application. It allows researchers and authors to instantly convert unstructured, raw DOCX manuscripts into camera-ready templates complying with major academic journals (e.g., IEEE, ACM, APA, and Nature).
+ThaalDraft is an AI-powered academic document formatting application. It allows researchers and authors to instantly convert unstructured, raw DOCX manuscripts into camera-ready templates complying with major academic journals (e.g., IEEE, ACM, APA, and Nature).
 
 This repository is split into:
+
 - `/frontend`: A Next.js 15 web application.
 - `/backend`: A FastAPI python application handling structure parsing and document formatting.
 
@@ -10,7 +11,7 @@ This repository is split into:
 
 ## 🔐 Authentication Architecture
 
-The system uses **Firebase Authentication** for user registration, sessions, and social login (Google OAuth). 
+The system uses **Firebase Authentication** for user registration, sessions, and social login (Google OAuth).
 
 ```mermaid
 sequenceDiagram
@@ -19,7 +20,7 @@ sequenceDiagram
     participant Frontend as Next.js Web App
     participant Firebase as Firebase Auth
     participant Backend as FastAPI Server
-    
+
     User->>Frontend: Enter Credentials / Click Google Sign-In
     Frontend->>Firebase: Authenticate User
     Firebase-->>Frontend: Return ID Token (JWT)
@@ -31,6 +32,7 @@ sequenceDiagram
 ```
 
 ### Key Security Features
+
 1. **JWT Verification**: The backend verifies token signatures using Google's public certificates fetched dynamically and cached according to the certificate API's `Cache-Control` header.
 2. **Client-Side Route Guarding**: Automatic redirects secure the dashboard. Anonymous users trying to hit `/dashboard` are routed to `/login`, and authenticated users trying to hit `/login` are routed back to the `/dashboard`.
 
@@ -39,7 +41,9 @@ sequenceDiagram
 ## 🛠️ Local Setup & Configuration
 
 ### 1. Backend Configuration (`/backend`)
+
 Create a `.env` file in the `backend/` folder based on [.env.example](file:///d:/hakathonProjks/New%20folder/backend/.env.example):
+
 ```env
 FIREBASE_PROJECT_ID=your-firebase-project-id
 ```
@@ -49,6 +53,7 @@ FIREBASE_PROJECT_ID=your-firebase-project-id
 > If `FIREBASE_PROJECT_ID` is left empty, the backend operates in **Mock Auth Mode**. It prints a warning to stdout and accepts any token starting with `mock-` (e.g. `mock-user-token`) as a valid session. This allows you to run and test the codebase locally without creating a Firebase project.
 
 #### Steps to Run:
+
 1. Navigate to `/backend`:
    ```bash
    cd backend
@@ -65,7 +70,9 @@ FIREBASE_PROJECT_ID=your-firebase-project-id
 ---
 
 ### 2. Frontend Configuration (`/frontend`)
+
 Create a `.env.local` file in the `frontend/` folder based on [.env.local.example](file:///d:/hakathonProjks/New%20folder/frontend/.env.local.example):
+
 ```env
 NEXT_PUBLIC_FIREBASE_API_KEY=your-api-key
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
@@ -76,6 +83,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 ```
 
 #### Steps to Run:
+
 1. Navigate to `/frontend`:
    ```bash
    cd frontend
@@ -95,12 +103,22 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 ## 📦 Tech Stack Summary
 
 ### Frontend:
+
 - **Core Framework**: Next.js 15 (using App Router)
 - **Styling**: TailwindCSS, custom CSS system
 - **Animations**: Framer Motion (for fluid login transitions, drag & drop states)
 - **Authentication**: Firebase Client SDK
 
 ### Backend:
+
 - **API Framework**: FastAPI (Python)
 - **Document Processing**: python-docx, lxml
 - **Security & Tokens**: PyJWT, cryptography
+
+---
+
+## Phase 1 — Architecture & Setup (Completed)
+
+- Added `ARCHITECTURE.md` describing services, data flow, and next steps.
+- Added env example templates: `backend/.env.example` and `frontend/.env.example`.
+- Added a lightweight health API at `/api/v1/health/` with liveness and readiness endpoints.
