@@ -19,41 +19,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
+  const email = user?.email ?? "";
+  const userInitials = email ? email.substring(0, 2).toUpperCase() : "US";
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
-    );
-  }
-
-  const userInitials = user?.email
-    ? user.email.substring(0, 2).toUpperCase()
-    : "US";
-
-  function NavContent() {
-    return (
-      <>
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || (item.href === "/dashboard" && pathname === "/dashboard");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
-              }`}
-            >
-              <item.icon className="w-5 h-5 mr-3 shrink-0" />
-              {item.label}
-              {isActive && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
-            </Link>
-          );
-        })}
-      </>
     );
   }
 
@@ -67,7 +40,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </Link>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
-          <NavContent />
+          <NavContent pathname={pathname} onNavigate={() => {}} />
         </nav>
         <div className="p-3 border-t border-border">
           <button
@@ -100,7 +73,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   <SheetTitle className="text-lg font-bold text-primary">ThaalDraft</SheetTitle>
                 </SheetHeader>
                 <nav className="flex-1 px-3 py-4 space-y-1">
-                  <NavContent />
+                  <NavContent pathname={pathname} onNavigate={() => setOpen(false)} />
                 </nav>
                 <div className="p-3 border-t border-border">
                   <button
@@ -132,5 +105,31 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
       </main>
     </div>
+  );
+}
+
+function NavContent({ pathname, onNavigate }: { pathname: string; onNavigate: () => void }) {
+  return (
+    <>
+      {navItems.map((item) => {
+        const isActive = pathname === item.href || (item.href === "/dashboard" && pathname === "/dashboard");
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNavigate}
+            className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              isActive
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <item.icon className="w-5 h-5 mr-3 shrink-0" />
+            {item.label}
+            {isActive && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
+          </Link>
+        );
+      })}
+    </>
   );
 }

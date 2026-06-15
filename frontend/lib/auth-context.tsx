@@ -1,12 +1,10 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useRef } from "react";
 import { 
   User, 
   onAuthStateChanged, 
   signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider
 } from "firebase/auth";
@@ -34,6 +32,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const routerRef = useRef(router);
+  const pathnameRef = useRef(pathname);
+
+  // Keep refs in sync without causing re-renders
+  useEffect(() => { routerRef.current = router; }, [router]);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -44,19 +48,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  // Simple route guarding
+  // Route guarding — use refs to avoid dependency churn
   useEffect(() => {
     if (loading) return;
 
-    const isDashboardRoute = pathname.startsWith("/dashboard");
-    const isLoginRoute = pathname === "/login";
+    const currentPath = pathnameRef.current;
+    const isDashboardRoute = currentPath.startsWith("/dashboard");
+    const isLoginRoute = currentPath === "/login";
 
     if (!user && isDashboardRoute) {
-      router.push("/login");
+      routerRef.current.push("/login");
     } else if (user && isLoginRoute) {
-      router.push("/dashboard");
+      routerRef.current.push("/dashboard");
     }
-  }, [user, loading, pathname, router]);
+  }, [user, loading]);
 
   const logout = async () => {
     try {

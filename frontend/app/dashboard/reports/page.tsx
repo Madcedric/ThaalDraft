@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { Loader2 } from "lucide-react";
 
-export default function ReportsPage() {
+function ReportsContent() {
   const { user } = useAuth();
   const [docId, setDocId] = useState("");
   const [reports, setReports] = useState<any[] | null>(null);
@@ -38,8 +39,10 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const q = searchParams.get('docId');
-    if (q) {
-      fetchReports(q);
+    if (q && user) {
+      // Defer fetch to avoid synchronous setState in effect
+      const timer = setTimeout(() => fetchReports(q), 0);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, user]);
@@ -49,21 +52,33 @@ export default function ReportsPage() {
       <h2 className="text-2xl font-semibold mb-4">Plagiarism Reports</h2>
       <div className="flex gap-2 mb-4">
         <input value={docId} onChange={(e)=>setDocId(e.target.value)} placeholder="Document ID" className="flex-1 border rounded px-3 py-2" />
-        <button disabled={!docId || !user || loading} onClick={() => fetchReports()} className="bg-indigo-600 text-white px-4 py-2 rounded">Fetch</button>
+        <button disabled={!docId || !user || loading} onClick={() => fetchReports()} className="bg-primary text-primary-foreground px-4 py-2 rounded">Fetch</button>
       </div>
       {loading && <p>Loading...</p>}
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p className="text-destructive">{error}</p>}
       {reports && (
         <div className="space-y-4">
-          {reports.length === 0 && <p className="text-slate-600">No reports found for this document.</p>}
+          {reports.length === 0 && <p className="text-muted-foreground">No reports found for this document.</p>}
           {reports.map((r:any)=> (
-            <div key={r.id} className="p-4 border rounded">
-              <div className="text-sm text-slate-500 mb-2">Report ID: {r.id} — Similarity: {r.similarity_score ?? 0}</div>
+            <div key={r.id} className="p-4 border border-border rounded-lg">
+              <div className="text-sm text-muted-foreground mb-2">Report ID: {r.id} — Similarity: {r.similarity_score ?? 0}</div>
               <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(r.report, null, 2)}</pre>
             </div>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <ReportsContent />
+    </Suspense>
   );
 }
