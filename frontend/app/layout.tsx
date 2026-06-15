@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ManuscriptAI",
-  description: "AI-Powered Academic Document Formatter",
+  title: "ThaalDraft",
+  description: "AI-Powered Manuscript Intelligence Platform",
 };
 
 export default function RootLayout({
