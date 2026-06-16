@@ -1,40 +1,192 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import FileResponse
-from app.models.document import DocumentResponse
-from app.services.docx_parser import save_upload_file, parse_docx
+from app.models.document import DocumentResponse, DocumentMeta
+from app.services.document_parser import save_upload_file, parse_document, extract_metadata, get_file_extension, MIME_TYPE_MAP
 from app.services.ieee_formatter import generate_ieee_docx
 from app.services.auth import get_current_user
+from app.services import storage_service, document_service, job_service
+from app.services import plagiarism_service
 import os
+import time
 
 router = APIRouter()
 
-@router.post("/upload", response_model=DocumentResponse)
+
+@router.post("/upload", response_model=DocumentMeta)
 async def upload_document(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    # 1. Store upload locally and validate
+    """Upload a document for processing. Supports DOCX, PDF, LaTeX, and Markdown."""
     file_path = await save_upload_file(file)
-    
+    size = os.path.getsize(file_path)
+    ext = get_file_extension(file_path)
+
     try:
-        # 2. Extract text and structure using python-docx
-        parsed_data = parse_docx(file_path)
-        return DocumentResponse(**parsed_data)
+        filename = os.path.basename(file_path)
+        dest_path = f"{int(time.time())}_{filename}"
+        storage_path = storage_service.upload_file_to_supabase(file_path, dest_path)
+
+        doc_payload = {
+            "filename": file.filename,
+            "storage_path": storage_path,
+            "status": "uploaded",
+            "size_bytes": size,
+            "file_type": ext.lstrip(".")
+        }
+        created = document_service.create_document_record(doc_payload)
+
+        job_payload = {
+            "document_id": created.get("id"),
+            "type": "parse",
+            "status": "pending",
+            "payload": {"file_path": file_path, "file_type": ext}
+        }
+        job_service.create_job(job_payload)
+
+        return DocumentMeta(
+            id=str(created.get("id")),
+            filename=file.filename,
+            storage_path=created.get("storage_path"),
+            status=created.get("status", "uploaded"),
+            size_bytes=created.get("size_bytes")
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.post("/parse")
+async def parse_document_sync(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Parse a document synchronously and return structured JSON."""
+    file_path = await save_upload_file(file)
+    
+    try:
+        parsed = parse_document(file_path)
+        metadata = extract_metadata(parsed)
+        
+        return {
+            "filename": file.filename,
+            "file_type": get_file_extension(file_path),
+            "metadata": metadata,
+            "parsed": parsed
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Parsing failed: {str(e)}")
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+
+@router.get("/{document_id}/plagiarism")
+async def get_plagiarism(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Get plagiarism reports for a document."""
+    try:
+        reports = plagiarism_service.get_plagiarism_reports_for_document(document_id)
+        return {"document_id": document_id, "reports": reports}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{document_id}")
+async def get_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a document by ID."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return doc
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/")
+async def list_documents(
+    current_user: dict = Depends(get_current_user),
+    limit: int = 50,
+    offset: int = 0
+):
+    """List documents for the current user."""
+    try:
+        user_id = current_user.get("id")
+        documents = document_service.list_documents_for_user(user_id, limit=limit, offset=offset)
+        return {"documents": documents, "limit": limit, "offset": offset}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{document_id}")
+async def delete_document(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a document."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        if doc.get("user_id") and doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this document")
+        
+        document_service.delete_document(document_id)
+        return {"message": "Document deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{document_id}/jobs")
+async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depends(get_current_user)):
+    """Create a job for a document. Payload should include 'type' (e.g., 'plagiarism', 'classify', 'structure', 'format')."""
+    try:
+        job_type = payload.get("type")
+        if not job_type:
+            raise HTTPException(status_code=400, detail="Missing job type")
+        
+        allowed_types = {"parse", "classify", "structure", "format", "plagiarism"}
+        if job_type not in allowed_types:
+            raise HTTPException(status_code=400, detail=f"Invalid job type. Allowed: {', '.join(allowed_types)}")
+        
+        job_payload = {
+            "document_id": document_id,
+            "type": job_type,
+            "status": "pending",
+            "payload": payload.get("payload", {})
+        }
+        created = job_service.create_job(job_payload)
+        return created
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{document_id}/jobs")
+async def get_document_jobs(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all jobs for a document."""
+    try:
+        jobs = job_service.list_jobs_for_document(document_id)
+        return {"document_id": document_id, "jobs": jobs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/format")
 async def format_document(file: UploadFile = File(...), template: str = Form(...), current_user: dict = Depends(get_current_user)):
+    """Format a document to a specific template. Currently supports IEEE."""
     if template != "ieee":
         raise HTTPException(status_code=400, detail="Only the 'ieee' template is currently supported.")
         
     file_path = await save_upload_file(file)
     try:
-        parsed_data = parse_docx(file_path)
-        output_path = file_path.replace(".docx", "_formatted.docx")
+        parsed_data = parse_document(file_path)
+        output_path = file_path.replace(os.path.splitext(file_path)[1], "_formatted.docx")
         generate_ieee_docx(parsed_data, output_path)
         
         return FileResponse(
             path=output_path, 
             filename=f"formatted_{file.filename}",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            media_type=MIME_TYPE_MAP.get(".docx", "application/octet-stream")
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
