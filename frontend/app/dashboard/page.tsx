@@ -8,16 +8,17 @@ import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useUpload } from "@/hooks/use-upload";
+import { TEMPLATES, formatFileSize } from "@/utils/helpers";
+import { TemplateId } from "@/types";
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { upload, isUploading, error: uploadError, reset: resetUpload } = useUpload();
   const [file, setFile] = useState<File | null>(null);
-  const [template, setTemplate] = useState("ieee");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [template, setTemplate] = useState<TemplateId>("ieee");
   const [isDone, setIsDone] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [processStep, setProcessStep] = useState(0);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,47 +30,19 @@ export default function DashboardPage() {
 
   const handleUpload = async () => {
     if (!file || !user) return;
-    setIsProcessing(true);
-    setErrorMessage(null);
+
     setProcessStep(1);
+    setTimeout(() => setProcessStep(2), 800);
+    setTimeout(() => setProcessStep(3), 1600);
 
     try {
-      const token = await user.getIdToken();
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("template", template);
-
-      setTimeout(() => setProcessStep(2), 800);
-      setTimeout(() => setProcessStep(3), 1600);
-
-      const response = await fetch((process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000") + "/api/v1/documents/upload", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || "Failed to upload the document.");
-      }
-
-      const data = await response.json();
-      const docId = data.id || data.id;
+      const result = await upload(file);
       setProcessStep(4);
-      router.push(`/dashboard/reports?docId=${docId}`);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "An unexpected error occurred.";
-      setErrorMessage(message);
-      setIsProcessing(false);
+      router.push(`/dashboard/reports?docId=${result.id}`);
+    } catch {
       setProcessStep(0);
     }
   };
-
-  const templates = [
-    { id: "ieee", name: "IEEE Standard", desc: "Two-column technical format" },
-    { id: "apa", name: "APA 7th Edition", desc: "Standard psychological format" },
-    { id: "nature", name: "Nature Journal", desc: "Single-column scientific" },
-  ];
 
   const steps = [
     { label: "Upload Document", active: processStep >= 1 },
@@ -95,12 +68,12 @@ export default function DashboardPage() {
               <CardContent>
                 <div className={`relative border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center transition-all duration-200
                     ${file ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'}
-                    ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}>
                   <input
                     type="file"
-                    accept=".docx"
+                    accept=".docx,.pdf,.tex,.md"
                     onChange={handleFileChange}
-                    disabled={isProcessing}
+                    disabled={isUploading}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
                   />
                   <AnimatePresence mode="wait">
@@ -109,7 +82,7 @@ export default function DashboardPage() {
                         <div className="p-4 bg-card shadow-sm rounded-full mb-4 border border-border">
                           <UploadCloud className="w-8 h-8 text-primary" />
                         </div>
-                        <p className="text-sm font-semibold text-foreground">Drag & drop your .docx file</p>
+                        <p className="text-sm font-semibold text-foreground">Drag & drop your manuscript file</p>
                         <p className="text-xs font-medium text-muted-foreground mt-1">or click to browse from your computer</p>
                       </motion.div>
                     ) : (
@@ -118,7 +91,7 @@ export default function DashboardPage() {
                           <FileText className="w-8 h-8 text-primary" />
                         </div>
                         <p className="text-base font-medium text-foreground truncate max-w-[250px]">{file.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatFileSize(file.size)}</p>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -134,11 +107,11 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {templates.map((t) => (
+                  {TEMPLATES.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => setTemplate(t.id)}
-                      disabled={isProcessing}
+                      disabled={isUploading}
                       className={`text-left p-4 rounded-xl border-2 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring
                         ${template === t.id
                           ? 'border-primary bg-primary/5 shadow-md'
@@ -150,7 +123,7 @@ export default function DashboardPage() {
                         {template === t.id && <CheckCircle2 className="w-4 h-4 text-primary" />}
                       </div>
                       <h4 className={`font-semibold text-sm ${template === t.id ? 'text-foreground' : 'text-foreground'}`}>{t.name}</h4>
-                      <p className="text-xs font-medium text-muted-foreground mt-1">{t.desc}</p>
+                      <p className="text-xs font-medium text-muted-foreground mt-1">{t.description}</p>
                     </button>
                   ))}
                 </div>
@@ -184,20 +157,20 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {errorMessage && (
+                {uploadError && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-sm">{errorMessage}</AlertDescription>
+                    <AlertDescription className="text-sm">{uploadError}</AlertDescription>
                   </Alert>
                 )}
 
                 {!isDone ? (
                   <Button
                     className="w-full h-11 relative overflow-hidden group"
-                    disabled={!file || isProcessing || !user}
+                    disabled={!file || isUploading || !user}
                     onClick={handleUpload}
                   >
-                    {isProcessing && (
+                    {isUploading && (
                       <motion.div
                         initial={{ x: '-100%' }}
                         animate={{ x: '100%' }}
@@ -206,8 +179,8 @@ export default function DashboardPage() {
                       />
                     )}
                     <span className="relative z-10 flex items-center">
-                      {isProcessing ? "Processing..." : "Generate Publication"}
-                      {!isProcessing && <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />}
+                      {isUploading ? "Processing..." : "Generate Publication"}
+                      {!isUploading && <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />}
                     </span>
                   </Button>
                 ) : (
@@ -215,13 +188,10 @@ export default function DashboardPage() {
                     variant="default"
                     className="w-full h-11 bg-green-600 hover:bg-green-700 text-white"
                     onClick={() => {
-                      setTimeout(() => {
-                        setIsDone(false);
-                        setFile(null);
-                        setProcessStep(0);
-                        if (downloadUrl) window.URL.revokeObjectURL(downloadUrl);
-                        setDownloadUrl(null);
-                      }, 500);
+                      setIsDone(false);
+                      setFile(null);
+                      setProcessStep(0);
+                      resetUpload();
                     }}
                   >
                     <CheckCircle2 className="mr-2 h-4 w-4" />
