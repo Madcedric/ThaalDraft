@@ -1,16 +1,22 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-
-
-class Section(BaseModel):
-    heading: str
-    content: str
+from datetime import datetime
 
 
 class Author(BaseModel):
     name: str
     affiliation: Optional[str] = None
     email: Optional[str] = None
+
+
+class Section(BaseModel):
+    heading: str
+    label: str
+    content: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    level: int = 1
+    start_position: Optional[int] = None
+    end_position: Optional[int] = None
 
 
 class Reference(BaseModel):
@@ -22,14 +28,16 @@ class Reference(BaseModel):
     journal: Optional[str] = None
     volume: Optional[str] = None
     pages: Optional[str] = None
+    is_valid: bool = True
 
 
-class StructuredSection(BaseModel):
-    heading: str
-    label: str
-    content: str
-    confidence: float = Field(ge=0.0, le=1.0)
-    level: int = 1
+class ProcessingMetadata(BaseModel):
+    file_type: str
+    parser_used: str
+    classification_method: str = "deterministic"
+    processing_time_ms: Optional[float] = None
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat() + "Z")
+    version: str = "1.0"
 
 
 class DocumentMetadata(BaseModel):
@@ -42,15 +50,7 @@ class DocumentMetadata(BaseModel):
     reference_count: int = 0
     has_abstract: bool = False
     has_references: bool = False
-
-
-class ProcessingMetadata(BaseModel):
-    file_type: str
-    parser_used: str
-    classification_method: str = "deterministic"
-    processing_time_ms: Optional[float] = None
-    timestamp: Optional[str] = None
-    version: str = "1.0"
+    has_keywords: bool = False
 
 
 class DetectedSection(BaseModel):
@@ -69,28 +69,24 @@ class StructureConfidenceReport(BaseModel):
     warnings: List[str] = []
 
 
-class DocumentResponse(BaseModel):
-    title: str
-    authors: List[str]
-    abstract: str
-    sections: List[Section]
-    references: List[str]
-    tables: List[List[List[str]]]
-    figures: List[str]
-
-
-class DocumentMeta(BaseModel):
-    id: str
-    filename: str
-    storage_path: Optional[str] = None
-    status: str
-    size_bytes: Optional[int] = None
-    created_at: Optional[str] = None
+class StructuredDocument(BaseModel):
+    title: Optional[str] = None
+    authors: List[Author] = []
+    abstract: str = ""
+    keywords: List[str] = []
+    sections: List[Section] = []
+    references: List[Reference] = []
+    citations: List[str] = []
+    tables: List[List[List[str]]] = []
+    figures: List[str] = []
+    metadata: DocumentMetadata = DocumentMetadata()
+    processing_metadata: ProcessingMetadata
+    confidence_report: StructureConfidenceReport = StructureConfidenceReport()
 
 
 class StructureAnalysisResponse(BaseModel):
     document_id: str
-    structured: Dict[str, Any]
+    structured: StructuredDocument
     status: str = "completed"
 
 

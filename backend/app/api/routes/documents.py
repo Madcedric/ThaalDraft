@@ -1,11 +1,13 @@
+from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import FileResponse
-from app.models.document import DocumentResponse, DocumentMeta
+from app.models.document import DocumentResponse, DocumentMeta, StructureAnalysisResponse
 from app.services.document_parser import save_upload_file, parse_document, extract_metadata, get_file_extension, MIME_TYPE_MAP
 from app.services.ieee_formatter import generate_ieee_docx
 from app.services.auth import get_current_user
 from app.services import storage_service, document_service, job_service
 from app.services import plagiarism_service
+from app.services import struct_service
 import os
 import time
 
@@ -75,6 +77,81 @@ async def parse_document_sync(
     finally:
         if os.path.exists(file_path):
             os.remove(file_path)
+
+
+@router.post("/{document_id}/analyze", response_model=StructureAnalysisResponse)
+async def analyze_document_structure(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Run full structure analysis on a parsed document."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        parsed = doc.get("parsed_json")
+        if not parsed:
+            raise HTTPException(status_code=400, detail="Document has not been parsed yet")
+
+        file_type = doc.get("file_type", "unknown")
+        structured = struct_service.normalize_classification(parsed, file_type=file_type)
+
+        document_service.update_document(
+            document_id,
+            {"structured_json": structured, "status": "structured", "updated_at": datetime.utcnow().isoformat() + "Z"},
+        )
+
+        return StructureAnalysisResponse(
+            document_id=document_id,
+            structured=structured,
+            status="completed",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{document_id}/structure")
+async def get_document_structure(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Get structured document data."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        structured = doc.get("structured_json")
+        if not structured:
+            raise HTTPException(status_code=404, detail="Structure analysis not yet performed")
+
+        backward_compatible = struct_service.get_backward_compatible(structured)
+
+        return {
+            "document_id": document_id,
+            "structured": structured,
+            "backward_compatible": backward_compatible,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/structure/validate")
+async def validate_structure_endpoint(payload: dict, current_user: dict = Depends(get_current_user)):
+    """Validate a structure JSON schema."""
+    try:
+        from app.services.structure.schema import StructuredDocument
+        from app.services.structure.validator import validate_structure, generate_confidence_report
+
+        structured = StructuredDocument(**payload)
+        validation = validate_structure(structured)
+        report = generate_confidence_report(structured)
+
+        return {
+            "validation": validation.model_dump(),
+            "confidence_report": report.model_dump(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
 
 
 @router.get("/{document_id}/plagiarism")
