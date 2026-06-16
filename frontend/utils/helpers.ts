@@ -10,6 +10,7 @@ export const TEMPLATES: Template[] = [
   { id: "springer", name: "Springer LNCS", description: "Lecture notes format" },
   { id: "elsevier", name: "Elsevier Journal", description: "Scientific journal format" },
   { id: "nature", name: "Nature Journal", description: "Single-column scientific" },
+  { id: "custom", name: "Custom Format", description: "Define your own rules" },
 ];
 
 export function formatFileSize(bytes: number): string {
@@ -30,6 +31,13 @@ export function formatDate(dateString: string): string {
   });
 }
 
+export function formatDateShort(dateString: string): string {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function getStatusColor(status: string): string {
   const statusColors: Record<string, string> = {
     uploaded: "text-muted-foreground",
@@ -39,14 +47,33 @@ export function getStatusColor(status: string): string {
     classified: "text-purple-600",
     structuring: "text-indigo-500",
     structured: "text-indigo-600",
-    formatting: "text-green-500",
-    formatted: "text-green-600",
+    formatting: "text-emerald-500",
+    formatted: "text-emerald-600",
     failed: "text-destructive",
     pending: "text-muted-foreground",
     started: "text-blue-500",
     completed: "text-green-600",
   };
   return statusColors[status] || "text-muted-foreground";
+}
+
+export function getStatusVariant(status: string): "default" | "secondary" | "destructive" | "outline" {
+  const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+    uploaded: "secondary",
+    parsing: "outline",
+    parsed: "outline",
+    classifying: "outline",
+    classified: "outline",
+    structuring: "outline",
+    structured: "outline",
+    formatting: "outline",
+    formatted: "default",
+    failed: "destructive",
+    pending: "secondary",
+    started: "outline",
+    completed: "default",
+  };
+  return variants[status] || "secondary";
 }
 
 export function getJobTypeLabel(type: string): string {
@@ -62,4 +89,15 @@ export function getJobTypeLabel(type: string): string {
 
 export function getTemplateById(id: TemplateId): Template | undefined {
   return TEMPLATES.find((t) => t.id === id);
+}
+
+export function getFileTypeFromFilename(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  const types: Record<string, string> = {
+    docx: "DOCX",
+    pdf: "PDF",
+    tex: "LaTeX",
+    md: "Markdown",
+  };
+  return types[ext] || ext.toUpperCase();
 }

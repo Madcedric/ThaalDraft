@@ -1,19 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useDocument } from "@/hooks/use-document";
 import { enqueueJob } from "@/services/api";
 import { useAuth } from "@/lib/auth-context";
-import { formatDate, getStatusColor, getJobTypeLabel } from "@/utils/helpers";
+import { formatDate, formatFileSize, getStatusColor, getJobTypeLabel, getFileTypeFromFilename } from "@/utils/helpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertCircle, FileText, RefreshCw } from "lucide-react";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { MetricCard } from "@/components/ui/metric-card";
+import { ConfidenceBadge } from "@/components/ui/confidence-badge";
+import { SectionSummaryCard } from "@/components/ui/section-summary-card";
+import { LoadingState } from "@/components/ui/loading-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { StructuredData } from "@/types";
+import {
+  Loader2,
+  AlertCircle,
+  FileText,
+  RefreshCw,
+  Users,
+  Calendar,
+  FileType,
+  Hash,
+  BookOpen,
+  ArrowLeft,
+} from "lucide-react";
+import Link from "next/link";
 
 export default function DocumentPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
   const { document: doc, jobs, loading, error, refreshJobs } = useDocument(id);
@@ -36,69 +54,142 @@ export default function DocumentPage() {
     }
   };
 
+  const handleEnqueueStructure = async () => {
+    if (!user || !id) return;
+    setEnqueueing(true);
+    setEnqueueError(null);
+    try {
+      const token = await user.getIdToken();
+      await enqueueJob(id, "classify", token);
+      refreshJobs();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to enqueue job";
+      setEnqueueError(message);
+    } finally {
+      setEnqueueing(false);
+    }
+  };
+
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <LoadingState message="Loading document..." />;
   }
 
   if (error) {
-    return (
-      <Alert variant="destructive" className="max-w-4xl mx-auto mt-8">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
+    return <ErrorState message={error} onRetry={() => router.refresh()} />;
   }
 
   if (!doc) {
-    return (
-      <div className="text-center py-20 text-muted-foreground">
-        No document loaded.
-      </div>
-    );
+    return <ErrorState message="Document not found." />;
   }
 
+  const structured = doc.structured_json as StructuredData | undefined;
+  const metadata = structured?.metadata;
+  const confidenceReport = structured?.confidence_report;
+  const sections = structured?.sections || [];
+  const authors = structured?.authors || [];
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-12">
-      <div className="flex items-center justify-between">
+    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+      {/* Back Navigation */}
+      <Link
+        href="/dashboard/documents"
+        className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4 mr-1" />
+        Back to Documents
+      </Link>
+
+      {/* Document Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground">{doc.filename}</h2>
-          <p className="text-sm text-muted-foreground mt-1">Document ID: {doc.id}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            {structured?.title || doc.filename}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Document ID: {doc.id}
+          </p>
         </div>
-        <Badge variant="outline" className={getStatusColor(doc.status)}>
-          {doc.status}
-        </Badge>
+        <StatusBadge status={doc.status} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Document Metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard
+          label="File Type"
+          value={getFileTypeFromFilename(doc.filename)}
+          icon={FileType}
+        />
+        <MetricCard
+          label="File Size"
+          value={formatFileSize(doc.size_bytes || 0)}
+          icon={FileText}
+        />
+        <MetricCard
+          label="Word Count"
+          value={metadata?.word_count?.toLocaleString() || "—"}
+          icon={Hash}
+          description={metadata?.has_abstract ? "Has abstract" : undefined}
+        />
+        <MetricCard
+          label="References"
+          value={metadata?.reference_count?.toString() || "—"}
+          icon={BookOpen}
+          description={metadata?.has_references ? "Detected" : undefined}
+        />
+      </div>
+
+      {/* Document Info + Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Document Info */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Document Info</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Filename</span>
-              <span className="font-medium">{doc.filename}</span>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between py-2 border-b border-border">
+              <span className="text-sm text-muted-foreground">Filename</span>
+              <span className="text-sm font-medium text-foreground">{doc.filename}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Status</span>
-              <span className={`font-medium ${getStatusColor(doc.status)}`}>{doc.status}</span>
+            <div className="flex items-center justify-between py-2 border-b border-border">
+              <span className="text-sm text-muted-foreground">Created</span>
+              <span className="text-sm font-medium text-foreground">{formatDate(doc.created_at)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Created</span>
-              <span className="font-medium">{formatDate(doc.created_at)}</span>
-            </div>
+            {authors.length > 0 && (
+              <div className="flex items-center justify-between py-2 border-b border-border">
+                <span className="text-sm text-muted-foreground">Authors</span>
+                <span className="text-sm font-medium text-foreground">
+                  {authors.map((a) => a.name).join(", ")}
+                </span>
+              </div>
+            )}
+            {confidenceReport?.overall_confidence !== undefined && (
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-muted-foreground">Detection Confidence</span>
+                <ConfidenceBadge confidence={confidenceReport.overall_confidence} />
+              </div>
+            )}
           </CardContent>
         </Card>
 
+        {/* Actions */}
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Actions</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <Button
+              onClick={handleEnqueueStructure}
+              disabled={enqueueing}
+              className="w-full"
+              variant="outline"
+            >
+              {enqueueing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Run Structure Analysis
+            </Button>
             <Button
               onClick={handleEnqueuePlagiarism}
               disabled={enqueueing}
@@ -112,19 +203,39 @@ export default function DocumentPage() {
               Run Plagiarism Check
             </Button>
             {enqueueError && (
-              <p className="text-sm text-destructive mt-2">{enqueueError}</p>
+              <p className="text-sm text-destructive">{enqueueError}</p>
             )}
           </CardContent>
         </Card>
       </div>
 
+      {/* Structure Summary */}
+      {sections.length > 0 && (
+        <SectionSummaryCard sections={sections} />
+      )}
+
+      {/* Abstract */}
+      {structured?.abstract && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Abstract</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {structured.abstract}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Processing Jobs */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Processing Jobs</CardTitle>
+          <CardTitle className="text-sm">Processing History</CardTitle>
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No jobs yet.</p>
+            <p className="text-sm text-muted-foreground">No processing jobs yet.</p>
           ) : (
             <div className="space-y-2">
               {jobs.map((job) => (
@@ -136,44 +247,13 @@ export default function DocumentPage() {
                       <p className="text-xs text-muted-foreground">{formatDate(job.created_at)}</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className={getStatusColor(job.status)}>
-                    {job.status}
-                  </Badge>
+                  <StatusBadge status={job.status} />
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
-
-      {(doc.parsed_json || doc.structured_json) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {doc.parsed_json && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Parsed Content</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs whitespace-pre-wrap max-h-64 overflow-auto bg-muted p-3 rounded-lg">
-                  {JSON.stringify(doc.parsed_json, null, 2)}
-                </pre>
-              </CardContent>
-            </Card>
-          )}
-          {doc.structured_json && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Structured Data</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs whitespace-pre-wrap max-h-64 overflow-auto bg-muted p-3 rounded-lg">
-                  {JSON.stringify(doc.structured_json, null, 2)}
-                </pre>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
     </div>
   );
 }

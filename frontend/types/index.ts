@@ -14,13 +14,67 @@ export interface Document {
   status: DocumentStatus;
   parsed_json?: Record<string, unknown>;
   ai_classification?: Record<string, unknown>;
-  structured_json?: Record<string, unknown>;
+  structured_json?: StructuredData;
   size_bytes?: number;
+  file_type?: string;
   created_at: string;
   updated_at?: string;
+  selected_journal?: string;
 }
 
 export type DocumentStatus = "uploaded" | "parsing" | "parsed" | "classifying" | "classified" | "structuring" | "structured" | "formatting" | "formatted" | "failed";
+
+export interface StructuredData {
+  title?: string;
+  authors?: Array<{ name: string; affiliation?: string; email?: string }>;
+  abstract?: string;
+  keywords?: string[];
+  sections?: Array<{
+    heading: string;
+    label: string;
+    content: string;
+    confidence: number;
+    level?: number;
+  }>;
+  references?: Array<{
+    raw_text: string;
+    doi?: string;
+    authors?: string[];
+    title?: string;
+    year?: number;
+    journal?: string;
+  }>;
+  citations?: string[];
+  metadata?: {
+    word_count?: number;
+    section_count?: number;
+    reference_count?: number;
+    has_abstract?: boolean;
+    has_references?: boolean;
+    doi?: string;
+  };
+  processing_metadata?: {
+    file_type?: string;
+    parser_used?: string;
+    classification_method?: string;
+    processing_time_ms?: number;
+  };
+  confidence_report?: {
+    overall_confidence?: number;
+    detected_labels?: string[];
+    missing_labels?: string[];
+    warnings?: string[];
+  };
+}
+
+export interface Journal {
+  id: string;
+  name: string;
+  shortName: string;
+  citationStyle: string;
+  description: string;
+  url?: string;
+}
 
 export interface Job {
   id: string;
@@ -56,7 +110,7 @@ export interface Export {
 
 export type ExportFormat = "docx" | "pdf";
 
-export type TemplateId = "ieee" | "apa" | "mla" | "acm" | "springer" | "elsevier" | "nature";
+export type TemplateId = "ieee" | "apa" | "mla" | "acm" | "springer" | "elsevier" | "nature" | "custom";
 
 export interface Template {
   id: TemplateId;
