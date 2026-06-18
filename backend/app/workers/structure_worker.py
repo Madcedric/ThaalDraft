@@ -30,7 +30,7 @@ def process_one():
 
     parsed = doc.get("parsed_json")
     ai_class = doc.get("ai_classification")
-    filename = doc.get("filename", "")
+    filename = doc.get("filename") or ""
     file_ext = filename.split(".")[-1] if "." in filename else "unknown"
     if not parsed:
         job_service.update_job(job_id, {"status": "failed", "result": {"error": "no parsed_json to structure"}, "finished_at": iso_now()})

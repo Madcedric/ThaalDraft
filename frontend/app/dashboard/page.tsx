@@ -60,15 +60,19 @@ export default function DashboardPage() {
     try {
       const result = await upload(file);
       if (selectedJournal) {
-        const token = await user.getIdToken();
-        await fetch(`${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"}/api/v1/documents/${result.id}`, {
-          method: "PATCH",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ selected_journal: selectedJournal.id }),
-        });
+        try {
+          const token = await user.getIdToken();
+          await fetch(`${process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000"}/api/v1/documents/${result.id}`, {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ selected_journal: selectedJournal.id }),
+          });
+        } catch {
+          console.warn("Failed to save journal selection");
+        }
       }
       router.push(`/dashboard/document/${result.id}`);
     } catch {

@@ -60,7 +60,7 @@ export default function DocumentPage() {
     setEnqueueError(null);
     try {
       const token = await user.getIdToken();
-      await enqueueJob(id, "classify", token);
+      await enqueueJob(id, "structure", token);
       refreshJobs();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to enqueue job";
@@ -82,7 +82,7 @@ export default function DocumentPage() {
     return <ErrorState message="Document not found." />;
   }
 
-  const structured = doc.structured_json as StructuredData | undefined;
+  const structured = (doc.parsed_json || doc.structured_json) as StructuredData | undefined;
   const metadata = structured?.metadata;
   const confidenceReport = structured?.confidence_report;
   const sections = structured?.sections || [];

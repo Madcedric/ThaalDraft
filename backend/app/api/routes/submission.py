@@ -125,11 +125,6 @@ async def list_submission_packages(
 ):
     """List all submission packages for the current user."""
     try:
-        user_id = current_user.get("id")
-        user_packages = [
-            p for p in _packages_store.values()
-            if True
-        ]
-        return {"packages": [p.model_dump() for p in user_packages], "total": len(user_packages)}
+        return {"packages": [p.model_dump() for p in _packages_store.values()], "total": len(_packages_store)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -28,9 +28,11 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
 
         parsed_data = parse_document(file_path)
 
+        safe_filename = file.filename or filename or "unnamed"
+
         doc_payload = {
             "user_id": current_user.get("id"),
-            "filename": file.filename,
+            "filename": safe_filename,
             "storage_path": storage_path,
             "status": "parsed",
             "size_bytes": size,
@@ -40,7 +42,7 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
 
         return DocumentMeta(
             id=str(created.get("id")),
-            filename=file.filename,
+            filename=safe_filename,
             storage_path=created.get("storage_path"),
             status=created.get("status", "parsed"),
             size_bytes=created.get("size_bytes")
@@ -86,7 +88,7 @@ async def analyze_document_structure(document_id: str, current_user: dict = Depe
         if not parsed:
             raise HTTPException(status_code=400, detail="Document has not been parsed yet")
 
-        filename = doc.get("filename", "")
+        filename = doc.get("filename") or ""
         file_ext = os.path.splitext(filename)[1].lstrip(".") if filename else "unknown"
         structured = struct_service.normalize_classification(parsed, file_type=file_ext)
 
@@ -113,6 +115,9 @@ async def get_document_structure(document_id: str, current_user: dict = Depends(
         doc = document_service.get_document(document_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
 
         parsed = doc.get("parsed_json")
         if not parsed:
@@ -154,6 +159,13 @@ async def validate_structure_endpoint(payload: dict, current_user: dict = Depend
 async def get_plagiarism(document_id: str, current_user: dict = Depends(get_current_user)):
     """Get plagiarism reports for a document."""
     try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         reports = plagiarism_service.get_plagiarism_reports_for_document(document_id)
         return {"document_id": document_id, "reports": reports}
     except Exception as e:
@@ -167,6 +179,10 @@ async def get_document(document_id: str, current_user: dict = Depends(get_curren
         doc = document_service.get_document(document_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         return doc
     except HTTPException:
         raise
@@ -197,7 +213,7 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
         
-        if doc.get("user_id") and doc.get("user_id") != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized to delete this document")
         
         document_service.delete_document(document_id)
@@ -212,6 +228,13 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
 async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depends(get_current_user)):
     """Create a job for a document. Payload should include 'type' (e.g., 'plagiarism', 'classify', 'structure', 'format')."""
     try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         job_type = payload.get("type")
         if not job_type:
             raise HTTPException(status_code=400, detail="Missing job type")
@@ -238,6 +261,13 @@ async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depe
 async def get_document_jobs(document_id: str, current_user: dict = Depends(get_current_user)):
     """Get all jobs for a document."""
     try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         jobs = job_service.list_jobs_for_document(document_id)
         return {"document_id": document_id, "jobs": jobs}
     except Exception as e:
@@ -263,3 +293,6 @@ async def format_document(file: UploadFile = File(...), template: str = Form(...
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)

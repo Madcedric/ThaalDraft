@@ -19,6 +19,9 @@ async def analyze_document_citations(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         structured = doc.get("parsed_json")
         if not structured:
             raise HTTPException(status_code=400, detail="Document has not been structured yet")
@@ -58,6 +61,9 @@ async def get_citation_report(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         citation_report = (doc.get("parsed_json") or {}).get("citation_report")
         if not citation_report:
             raise HTTPException(status_code=404, detail="Citation analysis not yet performed")
@@ -79,6 +85,9 @@ async def get_citation_health(
         doc = document_service.get_document(document_id)
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
 
         citation_report = (doc.get("parsed_json") or {}).get("citation_report")
         if not citation_report:
