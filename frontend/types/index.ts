@@ -16,6 +16,7 @@ export interface Document {
   ai_classification?: Record<string, unknown>;
   structured_json?: StructuredData;
   citation_report?: CitationReport;
+  compliance_report?: ComplianceReport;
   size_bytes?: number;
   file_type?: string;
   created_at: string;
@@ -126,6 +127,63 @@ export interface CitationReport {
   created_at: string;
 }
 
+export interface ComplianceIssue {
+  check_type: "word_count" | "abstract_length" | "reference_count" | "citation_style" | "figure_limit" | "section_structure" | "keyword_count" | "author_count" | "title_length" | "doi_required";
+  status: "pass" | "fail" | "warn";
+  severity: "error" | "warning" | "info";
+  message: string;
+  actual_value?: string;
+  expected_value?: string;
+  recommendation?: string;
+}
+
+export interface ComplianceScore {
+  overall: number;
+  word_count: number;
+  abstract_length: number;
+  reference_count: number;
+  citation_style: number;
+  figure_limit: number;
+  section_structure: number;
+  explanation: string;
+}
+
+export interface ComplianceReport {
+  document_id: string;
+  journal_id: string;
+  journal_name: string;
+  score: ComplianceScore;
+  issues: ComplianceIssue[];
+  checks_performed: number;
+  checks_passed: number;
+  checks_failed: number;
+  checks_warned: number;
+  processing_metadata?: {
+    processing_time_ms: number;
+    journal_rule_applied: string;
+  };
+  created_at: string;
+}
+
+export interface JournalRule {
+  journal_id: string;
+  journal_name: string;
+  min_words?: number;
+  max_words?: number;
+  min_abstract_words?: number;
+  max_abstract_words?: number;
+  min_references?: number;
+  max_references?: number;
+  citation_style: string;
+  max_figures?: number;
+  required_sections: string[];
+  min_keywords?: number;
+  max_keywords?: number;
+  requires_doi: boolean;
+  title_max_words?: number;
+  description: string;
+}
+
 export interface Journal {
   id: string;
   name: string;
@@ -147,7 +205,7 @@ export interface Job {
   finished_at?: string;
 }
 
-export type JobType = "parse" | "classify" | "structure" | "format" | "plagiarism" | "citation";
+export type JobType = "parse" | "classify" | "structure" | "format" | "plagiarism" | "citation" | "compliance";
 
 export type JobStatus = "pending" | "started" | "completed" | "failed";
 

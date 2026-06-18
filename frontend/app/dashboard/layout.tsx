@@ -33,7 +33,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard", label: "Workspace", icon: LayoutDashboard, section: "Core" },
   { href: "/dashboard/documents", label: "Documents", icon: FileText, section: "Core" },
   { href: "/dashboard/citations", label: "Citations", icon: BookOpen, section: "Intelligence" },
-  { href: "/dashboard/compliance", label: "Compliance", icon: Shield, disabled: true, section: "Intelligence" },
+  { href: "/dashboard/compliance", label: "Compliance", icon: Shield, section: "Intelligence" },
   { href: "/dashboard/reviewer", label: "Reviewer AI", icon: MessageSquare, disabled: true, section: "Production" },
   { href: "/dashboard/formatting", label: "Formatting Studio", icon: Palette, disabled: true, section: "Production" },
   { href: "/dashboard/batch", label: "Batch Processing", icon: Layers, disabled: true, section: "Production" },
