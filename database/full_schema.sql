@@ -274,74 +274,89 @@ ALTER TABLE submission_packages ENABLE ROW LEVEL SECURITY;
 -- ============================================================
 
 -- Users can read their own data
-CREATE POLICY IF NOT EXISTS "Users can view own profile" ON users
+DROP POLICY IF EXISTS "Users can view own profile" ON users;
+CREATE POLICY "Users can view own profile" ON users
     FOR SELECT USING (auth.uid() = id);
 
 -- Users can manage their own documents
-CREATE POLICY IF NOT EXISTS "Users can view own documents" ON documents
+DROP POLICY IF EXISTS "Users can view own documents" ON documents;
+CREATE POLICY "Users can view own documents" ON documents
     FOR SELECT USING (user_id = auth.uid()::text);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own documents" ON documents
+DROP POLICY IF EXISTS "Users can insert own documents" ON documents;
+CREATE POLICY "Users can insert own documents" ON documents
     FOR INSERT WITH CHECK (user_id = auth.uid()::text);
 
-CREATE POLICY IF NOT EXISTS "Users can update own documents" ON documents
+DROP POLICY IF EXISTS "Users can update own documents" ON documents;
+CREATE POLICY "Users can update own documents" ON documents
     FOR UPDATE USING (user_id = auth.uid()::text);
 
-CREATE POLICY IF NOT EXISTS "Users can delete own documents" ON documents
+DROP POLICY IF EXISTS "Users can delete own documents" ON documents;
+CREATE POLICY "Users can delete own documents" ON documents
     FOR DELETE USING (user_id = auth.uid()::text);
 
 -- Users can manage their own jobs
-CREATE POLICY IF NOT EXISTS "Users can view own jobs" ON jobs
+DROP POLICY IF EXISTS "Users can view own jobs" ON jobs;
+CREATE POLICY "Users can view own jobs" ON jobs
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Users can manage their own exports
-CREATE POLICY IF NOT EXISTS "Users can view own exports" ON exports
+DROP POLICY IF EXISTS "Users can view own exports" ON exports;
+CREATE POLICY "Users can view own exports" ON exports
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Users can manage their own plagiarism checks
-CREATE POLICY IF NOT EXISTS "Users can view own plagiarism checks" ON plagiarism_checks
+DROP POLICY IF EXISTS "Users can view own plagiarism checks" ON plagiarism_checks;
+CREATE POLICY "Users can view own plagiarism checks" ON plagiarism_checks
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Users can manage their own citations
-CREATE POLICY IF NOT EXISTS "Users can view own citations" ON citations
+DROP POLICY IF EXISTS "Users can view own citations" ON citations;
+CREATE POLICY "Users can view own citations" ON citations
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Users can manage their own references
-CREATE POLICY IF NOT EXISTS "Users can view own references" ON references_table
+DROP POLICY IF EXISTS "Users can view own references" ON references_table;
+CREATE POLICY "Users can view own references" ON references_table
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Users can manage their own compliance reports
-CREATE POLICY IF NOT EXISTS "Users can view own compliance reports" ON compliance_reports
+DROP POLICY IF EXISTS "Users can view own compliance reports" ON compliance_reports;
+CREATE POLICY "Users can view own compliance reports" ON compliance_reports
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Users can manage their own review reports
-CREATE POLICY IF NOT EXISTS "Users can view own review reports" ON review_reports
+DROP POLICY IF EXISTS "Users can view own review reports" ON review_reports;
+CREATE POLICY "Users can view own review reports" ON review_reports
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
 
 -- Templates are public read
-CREATE POLICY IF NOT EXISTS "Templates are public" ON templates
+DROP POLICY IF EXISTS "Templates are public" ON templates;
+CREATE POLICY "Templates are public" ON templates
     FOR SELECT USING (true);
 
 -- Users can manage their own batch jobs
-CREATE POLICY IF NOT EXISTS "Users can view own batch jobs" ON batch_jobs
+DROP POLICY IF EXISTS "Users can view own batch jobs" ON batch_jobs;
+CREATE POLICY "Users can view own batch jobs" ON batch_jobs
     FOR SELECT USING (user_id = auth.uid()::text);
 
 -- Users can manage their own submission packages
-CREATE POLICY IF NOT EXISTS "Users can view own submission packages" ON submission_packages
+DROP POLICY IF EXISTS "Users can view own submission packages" ON submission_packages;
+CREATE POLICY "Users can view own submission packages" ON submission_packages
     FOR SELECT USING (
         document_id IN (SELECT id FROM documents WHERE user_id = auth.uid()::text)
     );
