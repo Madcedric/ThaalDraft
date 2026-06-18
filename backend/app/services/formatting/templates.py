@@ -1,0 +1,171 @@
+from typing import List, Optional
+from .schema import (
+    FormatTemplate,
+    FontConfig,
+    MarginConfig,
+    HeadingConfig,
+    CitationStyleConfig,
+)
+
+
+TEMPLATES: dict[str, FormatTemplate] = {
+    "ieee": FormatTemplate(
+        id="ieee",
+        name="IEEE",
+        description="Two-column technical format for engineering and computer science",
+        body_font=FontConfig(name="Times New Roman", size_pt=10),
+        title_font=FontConfig(name="Times New Roman", size_pt=24, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=10, italic=True),
+        margins=MarginConfig(top_inches=0.75, bottom_inches=1.0, left_inches=0.63, right_inches=0.63),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=10, bold=True, small_caps=True, alignment="center", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=10, bold=True, italic=True, alignment="left", space_before_pt=6, space_after_pt=3),
+        ],
+        citation_style=CitationStyleConfig(style="ieee", numbering=True, in_text_format="[{number}]", reference_format="[{number}] {authors}, \"{title},\" {journal}, vol. {volume}, pp. {pages}, {year}."),
+        column_count=2,
+        line_spacing=1.0,
+        abstract_label="Abstract",
+        references_label="References",
+        figure_caption_prefix="Fig.",
+        table_caption_prefix="TABLE",
+        two_column=True,
+    ),
+    "acm": FormatTemplate(
+        id="acm",
+        name="ACM",
+        description="Computer science conference proceedings format",
+        body_font=FontConfig(name="Times New Roman", size_pt=10),
+        title_font=FontConfig(name="Times New Roman", size_pt=14, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=9, italic=True),
+        margins=MarginConfig(top_inches=0.75, bottom_inches=1.0, left_inches=0.75, right_inches=0.75),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=12, bold=True, alignment="left", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=11, bold=True, italic=True, alignment="left", space_before_pt=6, space_after_pt=3),
+        ],
+        citation_style=CitationStyleConfig(style="acm", numbering=True, in_text_format="{number}", reference_format="{number}. {authors}, \"{title}.\" {journal}, {year}."),
+        column_count=2,
+        line_spacing=1.0,
+        abstract_label="Abstract",
+        references_label="References",
+        figure_caption_prefix="Figure",
+        table_caption_prefix="Table",
+        requires_keywords=True,
+        keywords_label="Keywords",
+        two_column=True,
+    ),
+    "springer": FormatTemplate(
+        id="springer",
+        name="Springer LNCS",
+        description="Lecture Notes in Computer Science format",
+        body_font=FontConfig(name="Times New Roman", size_pt=10),
+        title_font=FontConfig(name="Times New Roman", size_pt=14, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=9),
+        margins=MarginConfig(top_inches=0.75, bottom_inches=1.0, left_inches=0.75, right_inches=0.75),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=12, bold=True, alignment="left", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=11, bold=True, alignment="left", space_before_pt=6, space_after_pt=3),
+        ],
+        citation_style=CitationStyleConfig(style="springer", numbering=True, in_text_format="{number}", reference_format="{number}. {authors}: {title}. {journal} {volume}, {pages} ({year})."),
+        column_count=2,
+        line_spacing=1.0,
+        abstract_label="Abstract",
+        references_label="References",
+        figure_caption_prefix="Fig.",
+        table_caption_prefix="Table",
+        two_column=True,
+    ),
+    "elsevier": FormatTemplate(
+        id="elsevier",
+        name="Elsevier",
+        description="Scientific journal format for Elsevier publications",
+        body_font=FontConfig(name="Times New Roman", size_pt=10),
+        title_font=FontConfig(name="Times New Roman", size_pt=14, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=10),
+        margins=MarginConfig(top_inches=1.0, bottom_inches=1.0, left_inches=1.0, right_inches=1.0),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=12, bold=True, alignment="left", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=11, bold=True, italic=True, alignment="left", space_before_pt=6, space_after_pt=3),
+        ],
+        citation_style=CitationStyleConfig(style="elsevier", numbering=True, in_text_format="{number}", reference_format="{number}. {authors}, {title}. {journal} {volume} ({year}) {pages}."),
+        column_count=1,
+        line_spacing=1.5,
+        abstract_label="Abstract",
+        references_label="References",
+        figure_caption_prefix="Fig.",
+        table_caption_prefix="Table",
+        requires_keywords=True,
+        keywords_label="Keywords",
+    ),
+    "apa": FormatTemplate(
+        id="apa",
+        name="APA 7th Edition",
+        description="American Psychological Association formatting standard",
+        body_font=FontConfig(name="Times New Roman", size_pt=12),
+        title_font=FontConfig(name="Times New Roman", size_pt=14, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=12),
+        margins=MarginConfig(top_inches=1.0, bottom_inches=1.0, left_inches=1.0, right_inches=1.0),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=14, bold=True, alignment="center", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=12, bold=True, alignment="left", space_before_pt=12, space_after_pt=6),
+        ],
+        citation_style=CitationStyleConfig(style="apa", in_text_format="({author}, {year})", reference_format="{authors} ({year}). {title}. {journal}, {volume}({pages}), {doi}."),
+        column_count=1,
+        line_spacing=2.0,
+        abstract_label="Abstract",
+        references_label="References",
+        figure_caption_prefix="Figure",
+        table_caption_prefix="Table",
+    ),
+    "mla": FormatTemplate(
+        id="mla",
+        name="MLA 9th Edition",
+        description="Modern Language Association humanities formatting",
+        body_font=FontConfig(name="Times New Roman", size_pt=12),
+        title_font=FontConfig(name="Times New Roman", size_pt=14, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=12),
+        margins=MarginConfig(top_inches=1.0, bottom_inches=1.0, left_inches=1.0, right_inches=1.0),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=14, bold=True, alignment="center", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=12, bold=True, alignment="left", space_before_pt=12, space_after_pt=6),
+        ],
+        citation_style=CitationStyleConfig(style="mla", in_text_format="({author} {page})", reference_format="{authors}. \"{title}.\" {journal}, vol. {volume}, no. {issue}, {year}, pp. {pages}."),
+        column_count=1,
+        line_spacing=2.0,
+        abstract_label="Abstract",
+        references_label="Works Cited",
+        figure_caption_prefix="Fig.",
+        table_caption_prefix="Table",
+    ),
+    "nature": FormatTemplate(
+        id="nature",
+        name="Nature",
+        description="Single-column scientific journal format",
+        body_font=FontConfig(name="Times New Roman", size_pt=10),
+        title_font=FontConfig(name="Times New Roman", size_pt=16, bold=True),
+        abstract_font=FontConfig(name="Times New Roman", size_pt=10),
+        margins=MarginConfig(top_inches=1.0, bottom_inches=1.0, left_inches=1.0, right_inches=1.0),
+        headings=[
+            HeadingConfig(level=1, font_size_pt=12, bold=True, alignment="left", space_before_pt=12, space_after_pt=6),
+            HeadingConfig(level=2, font_size_pt=11, bold=True, italic=True, alignment="left", space_before_pt=6, space_after_pt=3),
+        ],
+        citation_style=CitationStyleConfig(style="nature", numbering=True, in_text_format="{number}", reference_format="{number}. {authors} {title}. {journal} {volume}, {pages} ({year})."),
+        column_count=1,
+        line_spacing=1.5,
+        abstract_label="Abstract",
+        references_label="References",
+        figure_caption_prefix="Fig.",
+        table_caption_prefix="Table",
+    ),
+}
+
+
+def get_template(template_id: str) -> Optional[FormatTemplate]:
+    return TEMPLATES.get(template_id)
+
+
+def get_all_templates() -> List[FormatTemplate]:
+    return list(TEMPLATES.values())
+
+
+def get_supported_template_ids() -> List[str]:
+    return list(TEMPLATES.keys())

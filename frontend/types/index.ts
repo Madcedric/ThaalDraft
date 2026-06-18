@@ -236,6 +236,51 @@ export interface ReviewReport {
   created_at: string;
 }
 
+export interface FormatTemplate {
+  id: string;
+  name: string;
+  description: string;
+  body_font: { name: string; size_pt: number; bold: boolean; italic: boolean };
+  title_font: { name: string; size_pt: number; bold: boolean; italic: boolean };
+  margins: { top_inches: number; bottom_inches: number; left_inches: number; right_inches: number };
+  headings: Array<{
+    level: number;
+    font_size_pt: number;
+    bold: boolean;
+    italic: boolean;
+    small_caps: boolean;
+    alignment: string;
+  }>;
+  citation_style: { style: string; numbering: boolean; in_text_format: string; reference_format: string };
+  column_count: number;
+  line_spacing: number;
+  abstract_label: string;
+  references_label: string;
+  two_column: boolean;
+}
+
+export interface FormatValidation {
+  is_valid: boolean;
+  issues: string[];
+  warnings: string[];
+  score: number;
+}
+
+export interface FormattedOutput {
+  document_id: string;
+  template_id: string;
+  export_type: "docx" | "pdf";
+  file_path?: string;
+  storage_path?: string;
+  validation: FormatValidation;
+  processing_metadata?: {
+    processing_time_ms: number;
+    template_applied: string;
+    sections_formatted: number;
+  };
+  created_at: string;
+}
+
 export interface Journal {
   id: string;
   name: string;
