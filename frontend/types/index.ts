@@ -17,6 +17,7 @@ export interface Document {
   structured_json?: StructuredData;
   citation_report?: CitationReport;
   compliance_report?: ComplianceReport;
+  review_report?: ReviewReport;
   size_bytes?: number;
   file_type?: string;
   created_at: string;
@@ -182,6 +183,57 @@ export interface JournalRule {
   requires_doi: boolean;
   title_max_words?: number;
   description: string;
+}
+
+export interface ReviewStrength {
+  category: "writing_quality" | "research_clarity" | "methodology" | "literature_coverage" | "citation_completeness" | "research_gaps";
+  title: string;
+  description: string;
+}
+
+export interface ReviewFinding {
+  category: "writing_quality" | "research_clarity" | "methodology" | "literature_coverage" | "citation_completeness" | "research_gaps";
+  severity: "critical" | "major" | "minor" | "suggestion";
+  title: string;
+  description: string;
+  recommendation?: string;
+  section_ref?: string;
+}
+
+export interface CategoryScore {
+  category: "writing_quality" | "research_clarity" | "methodology" | "literature_coverage" | "citation_completeness" | "research_gaps";
+  score: number;
+  summary: string;
+  finding_count: number;
+}
+
+export interface PublicationReadiness {
+  overall: number;
+  label: string;
+  summary: string;
+}
+
+export interface ReviewReport {
+  document_id: string;
+  journal_id?: string;
+  strengths: ReviewStrength[];
+  weaknesses: ReviewFinding[];
+  missing_references: string[];
+  improvement_suggestions: string[];
+  category_scores: CategoryScore[];
+  publication_readiness: PublicationReadiness;
+  total_findings: number;
+  critical_count: number;
+  major_count: number;
+  minor_count: number;
+  suggestion_count: number;
+  analysis_method: string;
+  processing_metadata?: {
+    processing_time_ms: number;
+    sections_analyzed: number;
+    references_count: number;
+  };
+  created_at: string;
 }
 
 export interface Journal {
