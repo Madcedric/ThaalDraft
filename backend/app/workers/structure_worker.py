@@ -30,15 +30,16 @@ def process_one():
 
     parsed = doc.get("parsed_json")
     ai_class = doc.get("ai_classification")
-    file_type = doc.get("file_type", "unknown")
+    filename = doc.get("filename", "")
+    file_ext = filename.split(".")[-1] if "." in filename else "unknown"
     if not parsed:
         job_service.update_job(job_id, {"status": "failed", "result": {"error": "no parsed_json to structure"}, "finished_at": iso_now()})
         return
 
     try:
-        structured = struct_service.normalize_classification(parsed, ai_class, file_type=file_type)
+        structured = struct_service.normalize_classification(parsed, ai_class, file_type=file_ext)
 
-        document_service.update_document(document_id, {"structured_json": structured, "status": "structured", "updated_at": iso_now()})
+        document_service.update_document(document_id, {"parsed_json": structured, "status": "structured", "updated_at": iso_now()})
 
         job_service.update_job(job_id, {"status": "finished", "result": structured, "finished_at": iso_now()})
         print(f"Structure job {job_id} finished.")

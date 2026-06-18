@@ -19,7 +19,7 @@ async def analyze_document_citations(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        structured = doc.get("structured_json")
+        structured = doc.get("parsed_json")
         if not structured:
             raise HTTPException(status_code=400, detail="Document has not been structured yet")
 
@@ -29,9 +29,11 @@ async def analyze_document_citations(
             resolve_dois=False,
         )
 
+        existing = doc.get("parsed_json") or {}
+        existing["citation_report"] = report.model_dump()
         document_service.update_document(
             document_id,
-            {"citation_report": report.model_dump(), "updated_at": datetime.utcnow().isoformat() + "Z"},
+            {"parsed_json": existing, "updated_at": datetime.utcnow().isoformat() + "Z"},
         )
 
         return CitationAnalysisResponse(
@@ -56,7 +58,7 @@ async def get_citation_report(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        citation_report = doc.get("citation_report")
+        citation_report = (doc.get("parsed_json") or {}).get("citation_report")
         if not citation_report:
             raise HTTPException(status_code=404, detail="Citation analysis not yet performed")
 
@@ -78,7 +80,7 @@ async def get_citation_health(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        citation_report = doc.get("citation_report")
+        citation_report = (doc.get("parsed_json") or {}).get("citation_report")
         if not citation_report:
             raise HTTPException(status_code=404, detail="Citation analysis not yet performed")
 

@@ -45,7 +45,7 @@ async def preview_formatting(
         if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.get("structured_json") or {}
+        structured_data = doc.get("parsed_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
@@ -87,7 +87,7 @@ async def format_document_endpoint(
         if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.get("structured_json") or {}
+        structured_data = doc.get("parsed_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,

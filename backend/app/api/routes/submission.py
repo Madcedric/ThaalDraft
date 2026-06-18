@@ -30,16 +30,16 @@ async def build_submission(
         if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.get("structured_json") or {}
+        structured_data = doc.get("parsed_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
                 detail="Document must be structured before building submission package",
             )
 
-        compliance_report = doc.get("compliance_report")
-        review_report = doc.get("review_report")
-        citation_report = doc.get("citation_report")
+        compliance_report = (doc.get("parsed_json") or {}).get("compliance_report")
+        review_report = (doc.get("parsed_json") or {}).get("review_report")
+        citation_report = (doc.get("parsed_json") or {}).get("citation_report")
 
         from app.services.compliance.rules import get_journal_rule
         journal_rule = get_journal_rule(request.journal_id)

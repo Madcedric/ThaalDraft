@@ -1,118 +1,162 @@
-# ThaalDraft System Validation Report
+# System Validation Report
 
-**Date:** 2026-06-18
-**Status:** Backend Fixed, Ready for Deployment
+Generated: 2026-06-18
+
+## Overall Status: PASS
+
+All 10 critical workflow tests passed successfully.
 
 ---
 
-## Validation Summary
+## 1. Database Status
 
-| Component | Status | Notes |
+### Supabase Connectivity
+- **Status**: PASS
+- **URL**: https://rjyzbgwudddievqagcpl.supabase.co
+- **Auth**: Service Role Key (loaded from backend/.env)
+
+### Table Existence (12/12)
+
+| Table | Status | Columns Verified |
 |---|---|---|
-| Backend Startup | PASS | All 53 endpoints registered |
-| Backend Health | PASS | `/api/v1/health/` returns 200 |
-| Backend Documents | PASS | `/api/v1/documents/` returns 401 (expected) |
-| Backend Compliance | PASS | `/api/v1/documents/compliance/journals` returns 200 |
-| Backend Formatting | PASS | `/api/v1/documents/formatting/templates` returns 200 |
-| Frontend Build | PASS | `next build` compiles, 14 pages generated |
-| Frontend TypeScript | PASS | All types valid |
-| Database Schema | PASS | `full_schema.sql` created |
-| Import Chain | PASS | All Python imports resolve |
+| users | PASS | id, email, name, provider, created_at |
+| documents | PASS | id, user_id, filename, storage_path, status, parsed_json, ai_classification, size_bytes, created_at, updated_at |
+| jobs | PASS | id, document_id, type, status, payload, result, created_at, started_at, finished_at |
+| exports | PASS | (empty - schema verified) |
+| plagiarism_checks | PASS | id, document_id, report, similarity_score, created_at |
+| citations | PASS | (empty - schema verified) |
+| references_table | PASS | (empty - schema verified) |
+| compliance_reports | PASS | (empty - schema verified) |
+| review_reports | PASS | (empty - schema verified) |
+| templates | PASS | id, name, description, body_font, title_font, margins, headings, citation_style, column_count, line_spacing, abstract_label, references_label, two_column, created_at |
+| batch_jobs | PASS | (empty - schema verified) |
+| submission_packages | PASS | (empty - schema verified) |
+
+### Missing Columns (fixed in code)
+- `documents.file_type` - Not in table; code now infers from filename extension
+- `documents.structured_json` - Not in table; code now uses `parsed_json` for structured data
+- `documents.citation_report` - Not in table; stored inside `parsed_json` as nested field
+- `documents.compliance_report` - Not in table; stored inside `parsed_json` as nested field
+- `documents.review_report` - Not in table; stored inside `parsed_json` as nested field
 
 ---
 
-## Test Results
+## 2. Backend Status
 
-### Backend Import Test
-```
-Command: python -c "from app.main import app; print('OK')"
-Result: Backend imports OK
-```
+### FastAPI Startup
+- **Status**: PASS
+- **Version**: 0.1.0
+- **Endpoints**: 52 registered
+- **dotenv**: Loaded from `backend/.env`
 
-### Backend Startup Test
-```
-Command: uvicorn app.main:app --host 0.0.0.0 --port 8000
-Result: Application startup complete
-```
+### API Routes
 
-### Endpoint Tests
+| Category | Endpoints | Status |
+|---|---|---|
+| Root | GET / | PASS |
+| Health | GET /api/v1/health/, GET /api/v1/health/ready | PASS |
+| Auth | POST /api/v1/auth/login, GET /api/v1/auth/me | PASS |
+| Documents | GET/POST/DELETE /api/v1/documents/* | PASS |
+| Citations | GET/POST /api/v1/documents/{id}/citations/* | PASS |
+| Compliance | GET/POST /api/v1/documents/{id}/compliance/* | PASS |
+| Reviewer | GET/POST /api/v1/documents/{id}/review/* | PASS |
+| Formatting | GET/POST /api/v1/documents/{id}/formatting/* | PASS |
+| Export | POST /api/v1/documents/{id}/export | PASS |
+| Batch | GET/POST/DELETE /api/v1/batch/* | PASS |
+| Submission | GET/POST /api/v1/documents/{id}/submission/* | PASS |
 
-| Endpoint | Method | Status | Response |
+### Environment Loading
+- **Status**: PASS
+- All 4 required variables loaded from `.env` via `python-dotenv`
+
+---
+
+## 3. Frontend Status
+
+### Build
+- **Status**: PASS
+- **Pages**: 14 generated
+- **TypeScript**: Compiles without errors
+
+### Configuration
+- **Status**: PASS
+- `NEXT_PUBLIC_API_BASE` defaults to `http://localhost:8000`
+- Firebase config loaded from `NEXT_PUBLIC_*` variables
+
+---
+
+## 4. End-to-End Test Results
+
+| Test | Endpoint | Status | Details |
 |---|---|---|---|
-| `/` | GET | 200 | `{"message":"ThaalDraft API is running"}` |
-| `/api/v1/health/` | GET | 200 | `{"status":"ok","service":"ThaalDraft API"}` |
-| `/api/v1/documents/compliance/journals` | GET | 200 | 3684 chars (7 journal rules) |
-| `/api/v1/documents/formatting/templates` | GET | 200 | 8472 chars (7 format templates) |
-| `/api/v1/documents/` | GET | 401 | Unauthorized (expected) |
+| 1. Upload | POST /api/v1/documents/upload | **PASS** | Document ID returned |
+| 2. Retrieval | GET /api/v1/documents/{id} | **PASS** | Document found |
+| 3. List | GET /api/v1/documents/?limit=5 | **PASS** | Documents listed |
+| 4. Structure | POST /api/v1/documents/{id}/analyze | **PASS** | Status: completed |
+| 5. Citations | POST /api/v1/documents/{id}/citations/analyze | **PASS** | Citations extracted |
+| 6. Compliance | POST /api/v1/documents/{id}/compliance/analyze | **PASS** | Report generated |
+| 7. Reviewer | POST /api/v1/documents/{id}/review/analyze | **PASS** | Report generated |
+| 8. Formatting | GET /api/v1/documents/formatting/templates | **PASS** | 7 templates available |
+| 9. Export | POST /api/v1/documents/{id}/export | **PASS** | Export job created |
+| 10. Submission | POST /api/v1/documents/{id}/submission/build | **PASS** | Package built |
 
-### Frontend Build Test
-```
-Command: next build
-Result: Compiled successfully in 6.0s
-Pages generated: 14
-Routes:
-  / (Static)
-  /_not-found (Static)
-  /dashboard (Static)
-  /dashboard/batch (Static)
-  /dashboard/citations (Static)
-  /dashboard/compliance (Static)
-  /dashboard/document/[id] (Dynamic)
-  /dashboard/documents (Static)
-  /dashboard/formatting (Static)
-  /dashboard/reports (Static)
-  /dashboard/reviewer (Static)
-  /dashboard/submission (Static)
-  /login (Static)
-```
+**Result: 10/10 PASS**
 
 ---
 
-## Issues Fixed
+## 5. Issues Fixed
 
-### Critical (5 issues)
-1. **DocumentService import crash** - 4 route files imported nonexistent class
-2. **Pydantic StructureConfidenceReport** - Missing default for `overall_confidence`
-3. **Pydantic StructuredDocument** - Missing default for `processing_metadata`
-4. **Citation extractor import** - `extract_citations` doesn't exist
-5. **Pydantic PublicationReadiness** - Missing default for `overall`
+### Critical
+1. **Backend startup crash** - 5 import/validation errors causing server to crash on startup
+2. **Supabase secrets in frontend .env** - DATABASE_URL and SERVICE_ROLE_KEY exposed to browser
+3. **Missing dotenv loader** - Backend couldn't read .env file
+4. **Schema mismatch** - Code referenced columns (file_type, structured_json) that don't exist in documents table
+5. **CORS blocking production** - Only localhost:3000 was allowed
 
-### All Fixed Files
-- `backend/app/api/routes/compliance.py`
-- `backend/app/api/routes/reviewer.py`
-- `backend/app/api/routes/formatting.py`
-- `backend/app/api/routes/submission.py`
-- `backend/app/services/structure/schema.py`
-- `backend/app/services/citation/__init__.py`
-- `backend/app/services/reviewer/schema.py`
+### Medium
+6. **Upload didn't parse** - Upload created a job but didn't parse the document
+7. **user_id not set** - Uploaded documents had no user_id, breaking list/delete
+8. **Reports stored in non-existent columns** - citation_report, compliance_report, review_report stored in columns that don't exist
 
 ---
 
-## Pending Items
+## 6. Remaining Items
 
-### Must Fix Before Deployment
-1. Set `NEXT_PUBLIC_API_BASE` in frontend `.env.local`
-2. Update CORS in backend to accept production origin
-3. Run `database/full_schema.sql` in Supabase
-4. Remove backend secrets from frontend `.env`
-
-### Should Fix Before v1 Release
-1. Add `python-dotenv` to backend
-2. Refactor frontend fetch calls to use centralized API service
-3. Add global error handling for network failures
-4. Add integration tests
-
----
-
-## Conclusion
-
-**The application was non-functional because the backend crashed at startup.** All 5 critical import/validation errors have been fixed. The backend now starts successfully and all endpoints respond correctly.
-
-**The frontend "Failed to fetch" errors were a symptom of the backend being down.** Once the backend is deployed and `NEXT_PUBLIC_API_BASE` is configured, all frontend pages will work.
-
-**Next steps:**
-1. Deploy backend to Render
-2. Run database migration in Supabase
-3. Set `NEXT_PUBLIC_API_BASE` in Vercel
+### Must Complete Before Production
+1. Run `database/full_schema.sql` in Supabase SQL Editor (adds missing indexes, RLS, templates)
+2. Set `NEXT_PUBLIC_API_BASE` in Vercel to point to Render backend URL
+3. Deploy backend to Render
 4. Deploy frontend to Vercel
-5. Test end-to-end flow
+5. Test with real Firebase authentication (currently using mock tokens)
+
+### Recommended
+6. Add batch worker for background job processing
+7. Add proper logging (currently using print statements)
+8. Add rate limiting to API endpoints
+9. Add input validation for all endpoints
+10. Add CORS env var for dynamic origin configuration
+
+---
+
+## 7. File Changes
+
+| File | Change |
+|---|---|
+| `backend/app/main.py` | Added dotenv loader, expanded CORS origins |
+| `backend/app/api/routes/documents.py` | Fixed schema mismatch, added user_id, synchronous parsing |
+| `backend/app/api/routes/citations.py` | Fixed structured_json -> parsed_json |
+| `backend/app/api/routes/compliance.py` | Fixed structured_json -> parsed_json, report storage |
+| `backend/app/api/routes/reviewer.py` | Fixed structured_json -> parsed_json, report storage |
+| `backend/app/api/routes/formatting.py` | Fixed structured_json -> parsed_json |
+| `backend/app/api/routes/submission.py` | Fixed structured_json -> parsed_json, report reading |
+| `backend/app/workers/citation_worker.py` | Fixed structured_json -> parsed_json |
+| `backend/app/workers/structure_worker.py` | Fixed structured_json -> parsed_json |
+| `backend/app/workers/format_worker.py` | Fixed structured_json -> parsed_json |
+| `backend/requirements.txt` | Added python-dotenv |
+| `backend/.env` | Created with real secrets |
+| `backend/.env.example` | Created with placeholders |
+| `frontend/.env` | Cleaned - removed backend secrets |
+| `frontend/.env.local.example` | Created with placeholders |
+| `database/full_schema.sql` | Fixed CREATE POLICY syntax |
+| `ENVIRONMENT_AUDIT.md` | New - environment audit report |
+| `SYSTEM_VALIDATION_REPORT.md` | This file |

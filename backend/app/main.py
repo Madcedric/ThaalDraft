@@ -1,5 +1,11 @@
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+# Load .env file from backend root
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 from app.api.routes import documents, health, auth, exports, citations, compliance, reviewer, formatting, batch, submission
 
 app = FastAPI(title="ThaalDraft API", version="0.1.0")
@@ -7,7 +13,11 @@ app = FastAPI(title="ThaalDraft API", version="0.1.0")
 # Setup CORS for the Next.js frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://thaaldraft.vercel.app",
+        "https://thaaldraft-git-main.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

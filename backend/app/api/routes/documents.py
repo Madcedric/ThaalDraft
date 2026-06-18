@@ -26,28 +26,23 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
         dest_path = f"{int(time.time())}_{filename}"
         storage_path = storage_service.upload_file_to_supabase(file_path, dest_path)
 
+        parsed_data = parse_document(file_path)
+
         doc_payload = {
+            "user_id": current_user.get("id"),
             "filename": file.filename,
             "storage_path": storage_path,
-            "status": "uploaded",
+            "status": "parsed",
             "size_bytes": size,
-            "file_type": ext.lstrip(".")
+            "parsed_json": parsed_data,
         }
         created = document_service.create_document_record(doc_payload)
-
-        job_payload = {
-            "document_id": created.get("id"),
-            "type": "parse",
-            "status": "pending",
-            "payload": {"file_path": file_path, "file_type": ext}
-        }
-        job_service.create_job(job_payload)
 
         return DocumentMeta(
             id=str(created.get("id")),
             filename=file.filename,
             storage_path=created.get("storage_path"),
-            status=created.get("status", "uploaded"),
+            status=created.get("status", "parsed"),
             size_bytes=created.get("size_bytes")
         )
     except Exception as e:
@@ -91,12 +86,13 @@ async def analyze_document_structure(document_id: str, current_user: dict = Depe
         if not parsed:
             raise HTTPException(status_code=400, detail="Document has not been parsed yet")
 
-        file_type = doc.get("file_type", "unknown")
-        structured = struct_service.normalize_classification(parsed, file_type=file_type)
+        filename = doc.get("filename", "")
+        file_ext = os.path.splitext(filename)[1].lstrip(".") if filename else "unknown"
+        structured = struct_service.normalize_classification(parsed, file_type=file_ext)
 
         document_service.update_document(
             document_id,
-            {"structured_json": structured, "status": "structured", "updated_at": datetime.utcnow().isoformat() + "Z"},
+            {"parsed_json": structured, "status": "structured", "updated_at": datetime.utcnow().isoformat() + "Z"},
         )
 
         return StructureAnalysisResponse(
@@ -118,15 +114,15 @@ async def get_document_structure(document_id: str, current_user: dict = Depends(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        structured = doc.get("structured_json")
-        if not structured:
+        parsed = doc.get("parsed_json")
+        if not parsed:
             raise HTTPException(status_code=404, detail="Structure analysis not yet performed")
 
-        backward_compatible = struct_service.get_backward_compatible(structured)
+        backward_compatible = struct_service.get_backward_compatible(parsed)
 
         return {
             "document_id": document_id,
-            "structured": structured,
+            "structured": parsed,
             "backward_compatible": backward_compatible,
         }
     except HTTPException:

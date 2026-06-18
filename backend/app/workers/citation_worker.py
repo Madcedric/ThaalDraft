@@ -31,11 +31,11 @@ def process_one():
         )
         return
 
-    structured = doc.get("structured_json")
+    structured = doc.get("parsed_json")
     if not structured:
         job_service.update_job(
             job_id,
-            {"status": "failed", "result": {"error": "no structured_json for citation analysis"}, "finished_at": iso_now()},
+            {"status": "failed", "result": {"error": "no parsed_json for citation analysis"}, "finished_at": iso_now()},
         )
         return
 
@@ -46,9 +46,11 @@ def process_one():
             resolve_dois=False,
         )
 
+        existing = doc.get("parsed_json") or {}
+        existing["citation_report"] = report.model_dump()
         document_service.update_document(
             document_id,
-            {"citation_report": report.model_dump(), "updated_at": iso_now()},
+            {"parsed_json": existing, "updated_at": iso_now()},
         )
 
         job_service.update_job(

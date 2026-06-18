@@ -43,14 +43,14 @@ async def analyze_document_compliance(
         if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.get("structured_json") or {}
+        structured_data = doc.get("parsed_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
                 detail="Document must be structured before compliance analysis",
             )
 
-        citation_report = doc.get("citation_report")
+        citation_report = (doc.get("parsed_json") or {}).get("citation_report")
 
         report = analyze_compliance(
             document_id=document_id,
@@ -59,7 +59,9 @@ async def analyze_document_compliance(
             citation_report=citation_report,
         )
 
-        document_service.update_document(document_id, {"compliance_report": report.model_dump()})
+        existing = doc.get("parsed_json") or {}
+        existing["compliance_report"] = report.model_dump()
+        document_service.update_document(document_id, {"parsed_json": existing})
 
         return ComplianceAnalysisResponse(
             document_id=document_id,
@@ -85,7 +87,7 @@ async def get_document_compliance(
         if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        compliance_report = doc.get("compliance_report")
+        compliance_report = (doc.get("parsed_json") or {}).get("compliance_report")
         if not compliance_report:
             raise HTTPException(
                 status_code=404,
