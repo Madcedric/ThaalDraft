@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import documents, health, auth, exports, citations, compliance, reviewer, formatting, batch
+from app.api.routes import documents, health, auth, exports, citations, compliance, reviewer, formatting, batch, submission
 
 app = FastAPI(title="ThaalDraft API", version="0.1.0")
 
@@ -23,6 +23,7 @@ app.include_router(compliance.router, prefix="/api/v1/documents", tags=["Complia
 app.include_router(reviewer.router, prefix="/api/v1/documents", tags=["Reviewer"])
 app.include_router(formatting.router, prefix="/api/v1/documents", tags=["Formatting"])
 app.include_router(batch.router, prefix="/api/v1", tags=["Batch"])
+app.include_router(submission.router, prefix="/api/v1/documents", tags=["Submission"])
 
 @app.get("/")
 def root():

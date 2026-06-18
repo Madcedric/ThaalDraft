@@ -314,6 +314,53 @@ export interface BatchJobSummary {
   overall_progress: number;
 }
 
+export interface SubmissionPackage {
+  document_id: string;
+  journal_id: string;
+  journal_name: string;
+  template_id: string;
+  status: "pending" | "generating" | "completed" | "failed";
+  components: Array<{
+    component: string;
+    filename: string;
+    file_path?: string;
+    file_size?: number;
+    status: string;
+    error?: string;
+  }>;
+  cover_letter?: {
+    journal_name: string;
+    editor_name: string;
+    manuscript_title: string;
+    authors: string[];
+    key_findings: string;
+    significance: string;
+    content: string;
+  };
+  author_statement?: {
+    manuscript_title: string;
+    authors: string[];
+    contributions: Record<string, string>;
+    content: string;
+  };
+  conflict_statement?: {
+    manuscript_title: string;
+    authors: string[];
+    conflicts: string[];
+    content: string;
+  };
+  zip_path?: string;
+  zip_size?: number;
+  processing_metadata?: {
+    processing_time_ms: number;
+    components_requested: number;
+    components_completed: number;
+    components_failed: number;
+  };
+  created_at: string;
+  completed_at?: string;
+}
+
 export interface Journal {
   id: string;
   name: string;
