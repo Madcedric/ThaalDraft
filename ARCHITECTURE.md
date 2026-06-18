@@ -1,39 +1,321 @@
-# ThaalDraft - Architecture Overview
+# Architecture Overview
 
-This document summarizes the Phase 1 architecture and project layout for ThaalDraft.
+## System Architecture
 
-## Tech Stack
+Frontend (Next.js)
 
-- Frontend: Next.js (React)
-- Backend: FastAPI (Python)
-- Auth: Firebase Auth
-- Database: Supabase (Postgres)
-- Storage: Supabase Storage
-- Document parsing: python-docx, Docling
-- AI: OpenAI (NLP classification)
+↓
 
-## High-level Services
+API Layer (FastAPI)
 
-- Frontend (Next.js): user UI, authentication flows, upload UI, dashboards.
-- API (FastAPI): upload endpoints, parsing pipelines, formatting, classification, plagiarism checks.
-- Storage: Supabase Storage for uploaded files and processed artifacts.
-- Database: Supabase Postgres for structured document metadata and jobs.
-- Auth: Firebase for user authentication; backend verifies tokens.
+↓
 
-## Data Flow
+Core Services
 
-1. User authenticates via Firebase in the frontend.
-2. User uploads DOCX -> frontend sends to FastAPI upload endpoint.
-3. FastAPI stores raw file in Supabase Storage (or local/uploads during dev).
-4. Parsing (python-docx + Docling) extracts structure into JSON.
-5. AI classification (OpenAI) labels sections and structure.
-6. Formatting engines (IEEE/ACM) generate output DOCX/PDF stored in Storage.
+↓
 
-## Development & Environment
+Supabase
 
-- See `backend/.env.example` and `frontend/.env.example` for environment variables to configure.
-- `backend/app/main.py` exposes health and document routes for local testing.
+↓
 
-## Next Steps (Phase 2+)
+External Research Services
 
-- Phase 2: Implement authentication integration (Firebase tokens + user table in Supabase).
+---
+
+# Frontend Layer
+
+Responsibilities:
+
+- Authentication
+- Upload Interface
+- Batch Processing UI
+- Citation Workspace
+- Compliance Workspace
+- Reviewer Workspace
+
+Deployment:
+
+Vercel
+
+---
+
+# Backend Layer
+
+Responsibilities:
+
+- File Processing
+- NLP Processing
+- Citation Processing
+- Formatting
+- Compliance Validation
+- Reviewer AI
+
+Deployment:
+
+Render
+
+---
+
+# Core Services
+
+## Upload Service
+
+Purpose:
+
+Manage file uploads.
+
+Supported:
+
+- DOCX
+- PDF
+- TEX
+- MD
+
+Files:
+
+services/upload/
+
+---
+
+## Parsing Service
+
+Purpose:
+
+Extract document content.
+
+Libraries:
+
+- PyMuPDF
+- python-docx
+- pylatexenc
+
+Files:
+
+services/parsing/
+
+---
+
+## NLP Service
+
+Purpose:
+
+Identify manuscript structure.
+
+Libraries:
+
+- spaCy
+- SciBERT
+
+Files:
+
+services/nlp/
+
+---
+
+## Citation Service
+
+Purpose:
+
+Manage references and citations.
+
+Files:
+
+services/citations/
+
+Submodules:
+
+- extraction
+- validation
+- recommendations
+
+---
+
+## Formatting Service
+
+Purpose:
+
+Generate publication-ready outputs.
+
+Files:
+
+services/formatting/
+
+Supported Formats:
+
+- IEEE
+- APA
+- MLA
+- ACM
+- Springer
+- Elsevier
+
+---
+
+## Compliance Service
+
+Purpose:
+
+Validate journal requirements.
+
+Files:
+
+services/compliance/
+
+---
+
+## Reviewer Service
+
+Purpose:
+
+Generate AI review feedback.
+
+Models:
+
+- Ollama
+- Qwen
+- Llama 3
+
+Files:
+
+services/reviewer/
+
+---
+
+# Database Architecture
+
+Supabase PostgreSQL
+
+Core Tables:
+
+users
+
+projects
+
+manuscripts
+
+processing_jobs
+
+citations
+
+references
+
+compliance_reports
+
+review_reports
+
+exports
+
+---
+
+# Storage Architecture
+
+Supabase Storage
+
+Buckets:
+
+raw-uploads
+
+parsed-files
+
+exports
+
+reports
+
+---
+
+# External Services
+
+OpenAlex
+
+Purpose:
+Reference Discovery
+
+CrossRef
+
+Purpose:
+DOI Validation
+
+Semantic Scholar
+
+Purpose:
+Citation Recommendations
+
+---
+
+# Processing Flow
+
+Upload
+
+↓
+
+Storage
+
+↓
+
+Parsing
+
+↓
+
+NLP
+
+↓
+
+Citation Analysis
+
+↓
+
+Compliance Validation
+
+↓
+
+Formatting
+
+↓
+
+Reviewer AI
+
+↓
+
+Export
+
+---
+
+# Deployment Architecture
+
+Frontend
+
+Vercel
+
+↓
+
+Backend
+
+Render
+
+↓
+
+Supabase
+
+↓
+
+External APIs
+
+---
+
+# Folder Structure
+
+frontend/
+
+backend/
+
+docs/
+
+services/
+
+shared/
+
+components/
+
+types/
+
+tests/

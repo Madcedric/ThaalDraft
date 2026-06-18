@@ -220,7 +220,7 @@ async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depe
         if not job_type:
             raise HTTPException(status_code=400, detail="Missing job type")
         
-        allowed_types = {"parse", "classify", "structure", "format", "plagiarism"}
+        allowed_types = {"parse", "classify", "structure", "format", "plagiarism", "citation"}
         if job_type not in allowed_types:
             raise HTTPException(status_code=400, detail=f"Invalid job type. Allowed: {', '.join(allowed_types)}")
         

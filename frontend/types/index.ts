@@ -15,6 +15,7 @@ export interface Document {
   parsed_json?: Record<string, unknown>;
   ai_classification?: Record<string, unknown>;
   structured_json?: StructuredData;
+  citation_report?: CitationReport;
   size_bytes?: number;
   file_type?: string;
   created_at: string;
@@ -67,6 +68,64 @@ export interface StructuredData {
   };
 }
 
+export interface Citation {
+  id: string;
+  raw_text: string;
+  type: "numeric" | "author_year" | "unknown";
+  source_section: string;
+  reference_index: number;
+  is_resolved: boolean;
+  confidence: number;
+}
+
+export interface ReferenceValidation {
+  raw_text: string;
+  cited_count: number;
+  is_cited: boolean;
+  doi?: string;
+  is_valid_doi: boolean;
+  year?: number;
+  authors: string[];
+  title?: string;
+  journal?: string;
+}
+
+export interface CitationIssue {
+  type: "missing_reference" | "unused_reference" | "broken_citation" | "duplicate_reference" | "low_confidence" | "doi_not_found";
+  severity: "error" | "warning" | "info";
+  message: string;
+  citation_id?: string;
+  reference_index?: number;
+}
+
+export interface CitationHealthScore {
+  overall: number;
+  reference_coverage: number;
+  citation_validity: number;
+  duplicate_score: number;
+  broken_score: number;
+  doi_score: number;
+  explanation: string;
+}
+
+export interface CitationReport {
+  document_id: string;
+  citation_style: string;
+  total_citations: number;
+  total_references: number;
+  resolved_citations: number;
+  unresolved_citations: number;
+  citations: Citation[];
+  references: ReferenceValidation[];
+  issues: CitationIssue[];
+  health_score: CitationHealthScore;
+  processing_metadata?: {
+    processing_time_ms: number;
+    external_api_calls: number;
+  };
+  created_at: string;
+}
+
 export interface Journal {
   id: string;
   name: string;
@@ -88,7 +147,7 @@ export interface Job {
   finished_at?: string;
 }
 
-export type JobType = "parse" | "classify" | "structure" | "format" | "plagiarism";
+export type JobType = "parse" | "classify" | "structure" | "format" | "plagiarism" | "citation";
 
 export type JobStatus = "pending" | "started" | "completed" | "failed";
 
