@@ -43,7 +43,7 @@ class CategoryScore(BaseModel):
 
 
 class PublicationReadiness(BaseModel):
-    overall: float = Field(ge=0.0, le=100.0)
+    overall: float = Field(ge=0.0, le=100.0, default=0.0)
     label: str = ""
     summary: str = ""
 

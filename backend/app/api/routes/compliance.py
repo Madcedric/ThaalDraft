@@ -6,12 +6,10 @@ from app.services.compliance import (
     get_all_journal_rules,
     get_journal_rule,
 )
-from app.services.document_service import DocumentService
-from app.services.citation.analyzer import analyze_citations
+from app.services import document_service
 from app.api.routes.auth import get_current_user
 
 router = APIRouter()
-document_service = DocumentService()
 
 
 @router.get("/compliance/journals")
@@ -42,19 +40,17 @@ async def analyze_document_compliance(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.structured_json or {}
+        structured_data = doc.get("structured_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
                 detail="Document must be structured before compliance analysis",
             )
 
-        citation_report = None
-        if hasattr(doc, "citation_report") and doc.citation_report:
-            citation_report = doc.citation_report if isinstance(doc.citation_report, dict) else None
+        citation_report = doc.get("citation_report")
 
         report = analyze_compliance(
             document_id=document_id,
@@ -86,10 +82,10 @@ async def get_document_compliance(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        compliance_report = getattr(doc, "compliance_report", None)
+        compliance_report = doc.get("compliance_report")
         if not compliance_report:
             raise HTTPException(
                 status_code=404,

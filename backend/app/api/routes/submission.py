@@ -7,11 +7,10 @@ from app.services.submission import (
     SubmissionPackage,
     build_submission_package,
 )
-from app.services.document_service import DocumentService
+from app.services import document_service
 from app.api.routes.auth import get_current_user
 
 router = APIRouter()
-document_service = DocumentService()
 
 _packages_store: Dict[str, SubmissionPackage] = {}
 
@@ -28,27 +27,19 @@ async def build_submission(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.structured_json or {}
+        structured_data = doc.get("structured_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
                 detail="Document must be structured before building submission package",
             )
 
-        compliance_report = None
-        if hasattr(doc, "compliance_report") and doc.compliance_report:
-            compliance_report = doc.compliance_report if isinstance(doc.compliance_report, dict) else None
-
-        review_report = None
-        if hasattr(doc, "review_report") and doc.review_report:
-            review_report = doc.review_report if isinstance(doc.review_report, dict) else None
-
-        citation_report = None
-        if hasattr(doc, "citation_report") and doc.citation_report:
-            citation_report = doc.citation_report if isinstance(doc.citation_report, dict) else None
+        compliance_report = doc.get("compliance_report")
+        review_report = doc.get("review_report")
+        citation_report = doc.get("citation_report")
 
         from app.services.compliance.rules import get_journal_rule
         journal_rule = get_journal_rule(request.journal_id)
@@ -100,7 +91,7 @@ async def get_submission_package(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
         package = _packages_store.get(document_id)

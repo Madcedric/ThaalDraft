@@ -61,7 +61,7 @@ class DetectedSection(BaseModel):
 
 
 class StructureConfidenceReport(BaseModel):
-    overall_confidence: float = Field(ge=0.0, le=1.0)
+    overall_confidence: float = Field(ge=0.0, le=1.0, default=0.0)
     section_detections: List[DetectedSection] = []
     detected_labels: List[str] = []
     missing_labels: List[str] = []
@@ -80,7 +80,7 @@ class StructuredDocument(BaseModel):
     tables: List[List[List[str]]] = []
     figures: List[str] = []
     metadata: DocumentMetadata = DocumentMetadata()
-    processing_metadata: ProcessingMetadata
+    processing_metadata: Optional[ProcessingMetadata] = None
     confidence_report: StructureConfidenceReport = StructureConfidenceReport()
 
 

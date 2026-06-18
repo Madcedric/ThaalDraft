@@ -8,11 +8,10 @@ from app.services.formatting import (
     get_all_templates,
     get_template,
 )
-from app.services.document_service import DocumentService
+from app.services import document_service
 from app.api.routes.auth import get_current_user
 
 router = APIRouter()
-document_service = DocumentService()
 
 
 @router.get("/formatting/templates")
@@ -43,10 +42,10 @@ async def preview_formatting(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.structured_json or {}
+        structured_data = doc.get("structured_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
@@ -85,10 +84,10 @@ async def format_document_endpoint(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        structured_data = doc.structured_json or {}
+        structured_data = doc.get("structured_json") or {}
         if not structured_data:
             raise HTTPException(
                 status_code=400,
@@ -125,10 +124,10 @@ async def get_document_formatting(
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        if doc.user_id != current_user.get("id"):
+        if doc.get("user_id") != current_user.get("id"):
             raise HTTPException(status_code=403, detail="Not authorized")
 
-        status = doc.status
+        status = doc.get("status")
         if status != "formatted":
             return {
                 "document_id": document_id,
