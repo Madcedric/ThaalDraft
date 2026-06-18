@@ -281,6 +281,39 @@ export interface FormattedOutput {
   created_at: string;
 }
 
+export interface BatchFile {
+  filename: string;
+  status: "pending" | "uploading" | "processing" | "completed" | "failed";
+  progress: number;
+  error?: string;
+  document_id?: string;
+  file_size?: number;
+}
+
+export interface BatchJob {
+  id: string;
+  user_id: string;
+  job_type: "parse" | "classify" | "structure" | "format" | "citation" | "compliance" | "review";
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  total_files: number;
+  completed_files: number;
+  failed_files: number;
+  files: BatchFile[];
+  payload?: Record<string, unknown>;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+}
+
+export interface BatchJobSummary {
+  total_files: number;
+  completed_files: number;
+  failed_files: number;
+  running_files: number;
+  pending_files: number;
+  overall_progress: number;
+}
+
 export interface Journal {
   id: string;
   name: string;
