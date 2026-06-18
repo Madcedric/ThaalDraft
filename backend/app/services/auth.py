@@ -5,6 +5,8 @@ import jwt
 import requests
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from cryptography.x509 import load_pem_x509_certificate
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 security = HTTPBearer()
 
@@ -20,12 +22,24 @@ def get_firebase_public_keys() -> Dict[str, str]:
     now = time.time()
     if _certs_cache and now < _certs_expiry:
         return _certs_cache
-        
+
     try:
         res = requests.get(FIREBASE_CERTS_URL, timeout=5)
         if res.status_code == 200:
-            _certs_cache = res.json()
-            # Parse max-age from Cache-Control header
+            certs = res.json()
+            public_keys = {}
+            for kid, cert_pem in certs.items():
+                try:
+                    cert = load_pem_x509_certificate(cert_pem.encode())
+                    pubkey = cert.public_key()
+                    public_keys[kid] = pubkey.public_bytes(
+                        encoding=Encoding.PEM,
+                        format=PublicFormat.SubjectPublicKeyInfo,
+                    ).decode()
+                except Exception:
+                    continue
+
+            _certs_cache = public_keys
             control = res.headers.get("Cache-Control", "")
             max_age = 3600
             for part in control.split(","):
@@ -40,26 +54,24 @@ def get_firebase_public_keys() -> Dict[str, str]:
         if _certs_cache:
             return _certs_cache
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Failed to fetch Firebase public certificates: {str(e)}"
         )
-        
+
     raise HTTPException(status_code=500, detail="Failed to fetch Firebase public certificates")
 
 def verify_firebase_token(token: str, project_id: str) -> Dict:
     try:
-        # Decode header without verification to extract the key ID (kid)
         header = jwt.get_unverified_header(token)
         kid = header.get("kid")
         if not kid:
             raise HTTPException(status_code=401, detail="Token header is missing 'kid'")
-            
+
         public_keys = get_firebase_public_keys()
         public_key_pem = public_keys.get(kid)
         if not public_key_pem:
             raise HTTPException(status_code=401, detail="Invalid token 'kid'")
-            
-        # Decode and verify the RS256 token against Firebase specifications
+
         payload = jwt.decode(
             token,
             public_key_pem,
@@ -72,23 +84,22 @@ def verify_firebase_token(token: str, project_id: str) -> Dict:
         raise HTTPException(status_code=401, detail="Firebase token has expired")
     except jwt.InvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"Invalid Firebase token: {str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token verification failed: {str(e)}")
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
     token = credentials.credentials
-    
-    # Developer/local testing fallback:
-    # If project ID is not set or token starts with "mock-", return a mock user
+
     if not FIREBASE_PROJECT_ID:
-        # Using print instead of logger for simple workspace logs
         print("WARNING: FIREBASE_PROJECT_ID is not configured. Falling back to Mock Developer user.")
         return {
             "id": "mock-user-123",
             "email": "developer@example.com",
             "mock": True
         }
-        
+
     if token.startswith("mock-"):
         print("DEBUG: Active session authenticated via developer mock token.")
         return {
@@ -96,13 +107,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             "email": "developer@example.com",
             "mock": True
         }
-        
+
     payload = verify_firebase_token(token, FIREBASE_PROJECT_ID)
     uid = payload.get("sub")
     email = payload.get("email")
     if not uid or not email:
         raise HTTPException(status_code=401, detail="Invalid token payload (missing UID or email)")
-        
+
     return {
         "id": uid,
         "email": email
