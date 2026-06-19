@@ -1,4 +1,5 @@
 import os
+import uuid
 import requests
 from typing import Dict, Optional
 
@@ -9,12 +10,11 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 def create_document_record(doc: Dict) -> Dict:
     """Creates a document row in Supabase via REST. Returns the created representation.
 
-    If Supabase is not configured, returns the input dict with a generated id placeholder.
+    Always returns a dict with an 'id' field.
     """
     if not SUPABASE_URL or not SUPABASE_KEY:
         print("INFO: Supabase not configured — document record not persisted.")
-        # Provide a lightweight id placeholder
-        doc.setdefault("id", "local-" + (doc.get("filename", "unknown")))
+        doc.setdefault("id", "local-" + str(uuid.uuid4())[:8])
         return doc
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/documents"
@@ -26,16 +26,18 @@ def create_document_record(doc: Dict) -> Dict:
     }
 
     try:
-        res = requests.post(url, json=[doc], headers=headers, timeout=10)
+        res = requests.post(url, json=[doc], headers=headers, timeout=15)
         if res.status_code in (200, 201):
             data = res.json()
             if isinstance(data, list) and data:
                 return data[0]
-        print(f"WARN: create_document_record failed: {res.status_code} {res.text}")
-        return doc
+        print(f"WARN: create_document_record failed: {res.status_code} {res.text[:200]}")
     except Exception as e:
         print(f"ERROR: create_document_record exception: {e}")
-        return doc
+
+    # Always return a dict with an id — even if Supabase insert failed
+    doc.setdefault("id", str(uuid.uuid4()))
+    return doc
 
 
 def get_document(document_id: str) -> Optional[Dict]:

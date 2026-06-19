@@ -40,8 +40,12 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
         }
         created = document_service.create_document_record(doc_payload)
 
+        doc_id = created.get("id")
+        if not doc_id:
+            raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
+
         return DocumentMeta(
-            id=str(created.get("id")),
+            id=str(doc_id),
             filename=safe_filename,
             storage_path=created.get("storage_path"),
             status=created.get("status", "parsed"),
