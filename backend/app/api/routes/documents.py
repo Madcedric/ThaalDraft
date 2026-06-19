@@ -21,6 +21,9 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
     size = os.path.getsize(file_path)
     ext = get_file_extension(file_path)
 
+    user_id = current_user.get("id")
+    user_email = current_user.get("email", "")
+
     try:
         filename = os.path.basename(file_path)
         dest_path = f"{int(time.time())}_{filename}"
@@ -30,20 +33,25 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
 
         safe_filename = file.filename or filename or "unnamed"
 
+        # Ensure user exists in users table (FK constraint requires it)
+        document_service.ensure_user_exists(user_id, user_email)
+
         doc_payload = {
-            "user_id": current_user.get("id"),
+            "user_id": user_id,
             "filename": safe_filename,
             "storage_path": storage_path,
             "status": "parsed",
             "size_bytes": size,
             "parsed_json": parsed_data,
         }
+        print(f"UPLOAD: user_id={user_id}, filename={safe_filename}, size={size}")
         created = document_service.create_document_record(doc_payload)
 
         doc_id = created.get("id")
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
+        print(f"UPLOAD: document_id={doc_id}, status={created.get('status')}")
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
@@ -51,7 +59,10 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
             status=created.get("status", "parsed"),
             size_bytes=created.get("size_bytes")
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"UPLOAD ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -180,17 +191,22 @@ async def get_plagiarism(document_id: str, current_user: dict = Depends(get_curr
 async def get_document(document_id: str, current_user: dict = Depends(get_current_user)):
     """Get a document by ID."""
     try:
+        print(f"RETRIEVAL: document_id={document_id}, user_id={current_user.get('id')}")
         doc = document_service.get_document(document_id)
         if not doc:
+            print(f"RETRIEVAL: NOT FOUND - document_id={document_id}")
             raise HTTPException(status_code=404, detail="Document not found")
 
         if doc.get("user_id") != current_user.get("id"):
+            print(f"RETRIEVAL: UNAUTHORIZED - doc.user_id={doc.get('user_id')} != current_user.id={current_user.get('id')}")
             raise HTTPException(status_code=403, detail="Not authorized")
 
+        print(f"RETRIEVAL: FOUND - document_id={document_id}, filename={doc.get('filename')}")
         return doc
     except HTTPException:
         raise
     except Exception as e:
+        print(f"RETRIEVAL ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -265,16 +281,23 @@ async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depe
 async def get_document_jobs(document_id: str, current_user: dict = Depends(get_current_user)):
     """Get all jobs for a document."""
     try:
+        print(f"JOBS: document_id={document_id}, user_id={current_user.get('id')}")
         doc = document_service.get_document(document_id)
         if not doc:
+            print(f"JOBS: DOCUMENT NOT FOUND - document_id={document_id}")
             raise HTTPException(status_code=404, detail="Document not found")
 
         if doc.get("user_id") != current_user.get("id"):
+            print(f"JOBS: UNAUTHORIZED - doc.user_id={doc.get('user_id')} != current_user.id={current_user.get('id')}")
             raise HTTPException(status_code=403, detail="Not authorized")
 
         jobs = job_service.list_jobs_for_document(document_id)
+        print(f"JOBS: FOUND {len(jobs)} jobs for document_id={document_id}")
         return {"document_id": document_id, "jobs": jobs}
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"JOBS ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

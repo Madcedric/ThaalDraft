@@ -1,10 +1,59 @@
 import os
 import uuid
+import time
 import requests
 from typing import Dict, Optional
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+
+def _supabase_headers(include_return: bool = False) -> Dict:
+    h = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    if include_return:
+        h["Content-Type"] = "application/json"
+        h["Prefer"] = "return=representation"
+    return h
+
+
+def ensure_user_exists(user_id: str, email: str = "") -> bool:
+    """Ensure a user row exists in Supabase. Creates it if missing (idempotent).
+
+    Returns True if user exists or was created. False on failure.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return True
+
+    url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/users"
+
+    # Check if user exists
+    try:
+        r = requests.get(
+            f"{url}?id=eq.{user_id}&select=id",
+            headers=_supabase_headers(),
+            timeout=10,
+        )
+        if r.status_code == 200 and r.json():
+            return True
+    except Exception as e:
+        print(f"WARN: ensure_user_exists check failed: {e}")
+
+    # Insert user (upsert to avoid duplicate errors)
+    try:
+        r = requests.post(
+            url,
+            json=[{"id": user_id, "email": email or f"{user_id}@placeholder.com", "provider": "firebase"}],
+            headers={**_supabase_headers(include_return=True), "Prefer": "resolution=merge-duplicates,return=representation"},
+            timeout=10,
+        )
+        if r.status_code in (200, 201):
+            print(f"INFO: Created user {user_id} in users table")
+            return True
+        print(f"WARN: ensure_user_exists insert failed: {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        print(f"ERROR: ensure_user_exists insert exception: {e}")
+
+    return False
 
 
 def create_document_record(doc: Dict) -> Dict:
@@ -18,25 +67,26 @@ def create_document_record(doc: Dict) -> Dict:
         return doc
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/documents"
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=representation"
-    }
+    headers = _supabase_headers(include_return=True)
 
     try:
+        print(f"DB INSERT: user_id={doc.get('user_id')}, filename={doc.get('filename')}")
         res = requests.post(url, json=[doc], headers=headers, timeout=15)
+        print(f"DB INSERT RESPONSE: status={res.status_code}")
         if res.status_code in (200, 201):
             data = res.json()
             if isinstance(data, list) and data:
-                return data[0]
-        print(f"WARN: create_document_record failed: {res.status_code} {res.text[:200]}")
+                created = data[0]
+                print(f"DB INSERT SUCCESS: id={created.get('id')}")
+                return created
+        print(f"DB INSERT FAILED: {res.status_code} {res.text[:300]}")
     except Exception as e:
-        print(f"ERROR: create_document_record exception: {e}")
+        print(f"DB INSERT EXCEPTION: {e}")
 
     # Always return a dict with an id — even if Supabase insert failed
-    doc.setdefault("id", str(uuid.uuid4()))
+    fallback_id = str(uuid.uuid4())
+    doc.setdefault("id", fallback_id)
+    print(f"DB INSERT FALLBACK: id={fallback_id} (row NOT in database)")
     return doc
 
 
@@ -46,17 +96,20 @@ def get_document(document_id: str) -> Optional[Dict]:
         return None
 
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/documents?id=eq.{document_id}&select=*"
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    headers = _supabase_headers()
     try:
         res = requests.get(url, headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
             if isinstance(data, list) and data:
+                print(f"DB GET: document_id={document_id} FOUND, user_id={data[0].get('user_id')}")
                 return data[0]
-        print(f"WARN: get_document failed: {res.status_code} {res.text}")
+            print(f"DB GET: document_id={document_id} NOT FOUND (empty result)")
+            return None
+        print(f"DB GET FAILED: {res.status_code} {res.text[:200]}")
         return None
     except Exception as e:
-        print(f"ERROR: get_document exception: {e}")
+        print(f"DB GET EXCEPTION: {e}")
         return None
 
 
