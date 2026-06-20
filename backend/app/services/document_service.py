@@ -1,11 +1,14 @@
 import os
 import uuid
 import time
+import asyncio
 import requests
 from typing import Dict, Optional
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+_timeout = 10
 
 
 def _supabase_headers(include_return: bool = False) -> Dict:
@@ -211,7 +214,7 @@ def delete_document(document_id: str) -> bool:
     url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/documents?id=eq.{document_id}"
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     try:
-        res = requests.delete(url, headers=headers, timeout=10)
+        res = requests.delete(url, headers=headers, timeout=_timeout)
         if res.status_code in (200, 204):
             return True
         print(f"WARN: delete_document failed: {res.status_code} {res.text}")
@@ -219,3 +222,23 @@ def delete_document(document_id: str) -> bool:
     except Exception as e:
         print(f"ERROR: delete_document exception: {e}")
         return False
+
+
+async def get_document_async(document_id: str) -> Optional[Dict]:
+    """Async version of get_document using thread pool."""
+    return await asyncio.to_thread(get_document, document_id)
+
+
+async def update_document_async(document_id: str, patch: Dict) -> Optional[Dict]:
+    """Async version of update_document using thread pool."""
+    return await asyncio.to_thread(update_document, document_id, patch)
+
+
+async def create_document_record_async(doc: Dict) -> Dict:
+    """Async version of create_document_record using thread pool."""
+    return await asyncio.to_thread(create_document_record, doc)
+
+
+async def list_documents_for_user_async(user_id: str, limit: int = 50, offset: int = 0) -> list:
+    """Async version of list_documents_for_user using thread pool."""
+    return await asyncio.to_thread(list_documents_for_user, user_id, limit, offset)

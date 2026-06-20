@@ -15,6 +15,7 @@ import {
   Palette,
   Layers,
   Send,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
   { href: "/dashboard/formatting", label: "Formatting Studio", icon: Palette, section: "Production" },
   { href: "/dashboard/batch", label: "Batch Processing", icon: Layers, section: "Production" },
   { href: "/dashboard/submission", label: "Submission Package", icon: Send, section: "Production" },
+  { href: "/dashboard/reports", label: "Reports", icon: BarChart3, section: "Intelligence" },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, section: "Core" },
 ];
 

@@ -17,16 +17,16 @@ PyJWT>=2.10.0
 cryptography>=44.0.0
 passlib[bcrypt]>=1.7.4
 
-# Supabase (REST-based, no SDK needed)
+# AI/NLP - Ollama
+ollama>=0.4.0
+
+# NLP - spaCy
+spacy>=3.7.0
+
+# NLP - Sentence Transformers + SciBERT
+sentence-transformers>=3.0.0
+transformers>=4.40.0
+torch>=2.0.0
 
 # PDF (optional - requires LibreOffice or docx2pdf)
 # docx2pdf>=0.1.8
-
-# NLP (Phase 3+)
-# spacy>=3.7.0
-# transformers>=4.40.0
-# sentence-transformers>=3.0.0
-# torch>=2.0.0
-
-# ChromaDB (Phase 4+)
-# chromadb>=0.5.0

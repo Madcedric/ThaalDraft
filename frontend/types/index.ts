@@ -299,6 +299,7 @@ export interface BatchJob {
   completed_files: number;
   failed_files: number;
   files: BatchFile[];
+  batch_name?: string;
   payload?: Record<string, unknown>;
   created_at: string;
   started_at?: string;

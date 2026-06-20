@@ -1,5 +1,6 @@
 import re
 import time
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.structure.rules import (
@@ -13,6 +14,61 @@ from app.services.structure.schema import (
     DetectedSection,
     StructureConfidenceReport,
 )
+
+logger = logging.getLogger(__name__)
+
+_spacy_nlp = None
+
+
+def _get_spacy_nlp():
+    global _spacy_nlp
+    if _spacy_nlp is None:
+        try:
+            import spacy
+            _spacy_nlp = spacy.load("en_core_web_sm")
+        except Exception:
+            logger.warning("spaCy en_core_web_sm not available, NLP classification disabled")
+    return _spacy_nlp
+
+
+def _nlp_classify_content(content: str, heading: str) -> Optional[Tuple[str, float]]:
+    """Use spaCy NER + noun chunk analysis to classify section content."""
+    nlp = _get_spacy_nlp()
+    if not nlp or not content or len(content.split()) < 20:
+        return None
+
+    try:
+        doc = nlp(content[:5000])
+        entities = [ent.label_ for ent in doc.ents]
+        noun_chunks = [chunk.text.lower() for chunk in doc.noun_chunks]
+
+        all_text = heading.lower() + " " + " ".join(noun_chunks) + " " + content.lower()
+
+        method_keywords = ["algorithm", "method", "approach", "technique", "procedure", "model", "framework", "implementation", "experiment", "setup", "data collection", "preprocessing"]
+        result_keywords = ["result", "performance", "accuracy", "evaluation", "metric", "comparison", "outcome", "benchmark", "demonstrate", "achieve"]
+        intro_keywords = ["introduction", "background", "overview", "motivation", "goal", "objective", "contribution", "propose", "novel"]
+        discussion_keywords = ["discussion", "interpretation", "implication", "limitation", "future work", "related work", "comparison"]
+        conclusion_keywords = ["conclusion", "summary", "final", "concluding", "conclude", "outperform"]
+
+        if any(kw in all_text for kw in intro_keywords):
+            return "introduction", 0.65
+        if any(kw in all_text for kw in conclusion_keywords):
+            return "conclusion", 0.65
+        if any(kw in all_text for kw in result_keywords):
+            return "results", 0.65
+        if any(kw in all_text for kw in discussion_keywords):
+            return "discussion", 0.6
+        if any(kw in all_text for kw in method_keywords):
+            return "methods", 0.65
+
+        if entities.count("DATE") > 2 and entities.count("PERSON") > 1:
+            return "introduction", 0.5
+        if entities.count("PERCENT") > 2 or entities.count("QUANTITY") > 2:
+            return "results", 0.55
+
+        return None
+    except Exception:
+        return None
 
 
 def _normalize_heading(heading: str) -> str:
@@ -181,6 +237,14 @@ def classify_sections(
                     best_label = con_label
                     best_confidence = con_conf
                     best_method = "content_analysis"
+
+            nlp_match = _nlp_classify_content(content, heading)
+            if nlp_match:
+                nlp_label, nlp_conf = nlp_match
+                if nlp_conf > best_confidence:
+                    best_label = nlp_label
+                    best_confidence = nlp_conf
+                    best_method = "nlp_content_analysis"
 
         if format_type == "docx":
             best_confidence = min(best_confidence + 0.05, 1.0)

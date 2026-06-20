@@ -8,6 +8,8 @@ CROSSREF_API = "https://api.crossref.org/works"
 OPENALEX_API = "https://api.openalex.org/works"
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1/paper"
 
+DOI_TIMEOUT = 5
+
 
 def resolve_reference_doi(
     title: Optional[str] = None,
@@ -50,7 +52,7 @@ def _resolve_via_crossref(
         if year:
             params["filter"] = f"from-pub-date:{year-1},until-pub-date:{year+1}"
 
-        response = requests.get(CROSSREF_API, params=params, timeout=10)
+        response = requests.get(CROSSREF_API, params=params, timeout=DOI_TIMEOUT)
         if response.status_code != 200:
             return None
 
@@ -103,7 +105,7 @@ def _resolve_via_openalex(
         if year:
             params["filter"] = f"publication_year:{year}"
 
-        response = requests.get(OPENALEX_API, params=params, timeout=10)
+        response = requests.get(OPENALEX_API, params=params, timeout=DOI_TIMEOUT)
         if response.status_code != 200:
             return None
 

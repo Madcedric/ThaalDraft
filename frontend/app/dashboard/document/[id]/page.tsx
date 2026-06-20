@@ -3,7 +3,17 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useDocument } from "@/hooks/use-document";
-import { enqueueJob } from "@/services/api";
+import {
+  runStructureAnalysis,
+  analyzeCitations,
+  analyzeCompliance,
+  analyzeReview,
+  formatDocument,
+  analyzePlagiarism,
+  exportDocument,
+  getFormatTemplates,
+  getJournalRules,
+} from "@/services/api";
 import { useAuth } from "@/lib/auth-context";
 import { formatDate, formatFileSize, getStatusColor, getJobTypeLabel, getFileTypeFromFilename } from "@/utils/helpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +24,7 @@ import { ConfidenceBadge } from "@/components/ui/confidence-badge";
 import { SectionSummaryCard } from "@/components/ui/section-summary-card";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { StructuredData } from "@/types";
+import { StructuredData, CitationReport, ComplianceReport, ReviewReport, JournalRule, FormatTemplate } from "@/types";
 import {
   Loader2,
   AlertCircle,
@@ -26,6 +36,13 @@ import {
   Hash,
   BookOpen,
   ArrowLeft,
+  Sparkles,
+  Shield,
+  MessageSquare,
+  Palette,
+  CheckCircle2,
+  AlertTriangle,
+  Download,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -34,59 +51,111 @@ export default function DocumentPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
-  const { document: doc, jobs, loading, error, refreshJobs } = useDocument(id);
-  const [enqueueing, setEnqueueing] = useState(false);
-  const [enqueueError, setEnqueueError] = useState<string | null>(null);
+  const { document: doc, jobs, loading, error, refresh, refreshJobs } = useDocument(id);
 
-  const handleEnqueuePlagiarism = async () => {
+  const [runningAnalysis, setRunningAnalysis] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const runAnalysis = async (
+    name: string,
+    fn: (token: string) => Promise<unknown>
+  ) => {
     if (!user || !id) return;
-    setEnqueueing(true);
-    setEnqueueError(null);
+    setRunningAnalysis(name);
+    setAnalysisError(null);
     try {
       const token = await user.getIdToken();
-      await enqueueJob(id, "plagiarism", token);
-      refreshJobs();
+      await fn(token);
+      await refresh();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to enqueue job";
-      setEnqueueError(message);
+      const message = err instanceof Error ? err.message : `Failed to run ${name}`;
+      setAnalysisError(message);
     } finally {
-      setEnqueueing(false);
+      setRunningAnalysis(null);
     }
   };
 
-  const handleEnqueueStructure = async () => {
+  const handleRunStructure = () =>
+    runAnalysis("structure", (token) => runStructureAnalysis(id, token));
+
+  const handleRunCitations = () =>
+    runAnalysis("citations", (token) => analyzeCitations(id, token));
+
+  const handleRunCompliance = async () => {
     if (!user || !id) return;
-    setEnqueueing(true);
-    setEnqueueError(null);
+    setRunningAnalysis("compliance");
+    setAnalysisError(null);
     try {
       const token = await user.getIdToken();
-      await enqueueJob(id, "structure", token);
-      refreshJobs();
+      const { journals } = await getJournalRules(token);
+      const journalId = journals.length > 0 ? journals[0].journal_id : "ieee";
+      await analyzeCompliance(id, journalId, token);
+      await refresh();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to enqueue job";
-      setEnqueueError(message);
+      setAnalysisError(err instanceof Error ? err.message : "Failed to run compliance");
     } finally {
-      setEnqueueing(false);
+      setRunningAnalysis(null);
     }
   };
 
-  if (loading) {
-    return <LoadingState message="Loading document..." />;
-  }
+  const handleRunReview = () =>
+    runAnalysis("review", (token) => analyzeReview(id, token));
 
-  if (error) {
-    return <ErrorState message={error} onRetry={() => router.refresh()} />;
-  }
+  const handleRunFormatting = async () => {
+    if (!user || !id) return;
+    setRunningAnalysis("formatting");
+    setAnalysisError(null);
+    try {
+      const token = await user.getIdToken();
+      await formatDocument(id, "ieee", token);
+      await refresh();
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "Failed to format");
+    } finally {
+      setRunningAnalysis(null);
+    }
+  };
 
-  if (!doc) {
-    return <ErrorState message="Document not found." />;
-  }
+  const handleRunPlagiarism = () =>
+    runAnalysis("plagiarism", (token) => analyzePlagiarism(id, token));
+
+  const handleExport = async (template: string, format: string) => {
+    if (!user || !id) return;
+    setRunningAnalysis("export");
+    setAnalysisError(null);
+    try {
+      const token = await user.getIdToken();
+      const { blob, filename: serverFilename } = await exportDocument(id, template, format, token);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = serverFilename || `${doc?.filename || id}_${template}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setRunningAnalysis(null);
+    }
+  };
+
+  if (loading) return <LoadingState message="Loading document..." />;
+  if (error) return <ErrorState message={error} onRetry={() => router.refresh()} />;
+  if (!doc) return <ErrorState message="Document not found." />;
 
   const structured = (doc.parsed_json || doc.structured_json) as StructuredData | undefined;
   const metadata = structured?.metadata;
   const confidenceReport = structured?.confidence_report;
   const sections = structured?.sections || [];
   const authors = structured?.authors || [];
+  const citationReport = (structured as Record<string, unknown>)?.citation_report as CitationReport | undefined;
+  const complianceReport = (structured as Record<string, unknown>)?.compliance_report as ComplianceReport | undefined;
+  const reviewReport = (structured as Record<string, unknown>)?.review_report as ReviewReport | undefined;
+  const plagiarismReport = (structured as Record<string, unknown>)?.plagiarism_report as Record<string, unknown> | undefined;
+  const plagiarismMatches = ((plagiarismReport?.matches || []) as Array<{ document_id?: string; score?: number }>);
+  const plagiarismMaxScore = plagiarismMatches.length > 0 ? Math.max(...plagiarismMatches.map((m) => m.score || 0)) : 0;
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
@@ -174,44 +243,307 @@ export default function DocumentPage() {
         {/* Actions */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Actions</CardTitle>
+            <CardTitle className="text-sm">Run Analysis</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2">
             <Button
-              onClick={handleEnqueueStructure}
-              disabled={enqueueing}
+              onClick={handleRunStructure}
+              disabled={!!runningAnalysis}
               className="w-full"
               variant="outline"
+              size="sm"
             >
-              {enqueueing ? (
+              {runningAnalysis === "structure" ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4 mr-2" />
               )}
-              Run Structure Analysis
+              Structure Analysis
             </Button>
             <Button
-              onClick={handleEnqueuePlagiarism}
-              disabled={enqueueing}
+              onClick={handleRunCitations}
+              disabled={!!runningAnalysis}
               className="w-full"
+              variant="outline"
+              size="sm"
             >
-              {enqueueing ? (
+              {runningAnalysis === "citations" ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <Sparkles className="w-4 h-4 mr-2" />
               )}
-              Run Plagiarism Check
+              Citation Analysis
             </Button>
-            {enqueueError && (
-              <p className="text-sm text-destructive">{enqueueError}</p>
+            <Button
+              onClick={handleRunCompliance}
+              disabled={!!runningAnalysis}
+              className="w-full"
+              variant="outline"
+              size="sm"
+            >
+              {runningAnalysis === "compliance" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Shield className="w-4 h-4 mr-2" />
+              )}
+              Compliance Check
+            </Button>
+            <Button
+              onClick={handleRunReview}
+              disabled={!!runningAnalysis}
+              className="w-full"
+              variant="outline"
+              size="sm"
+            >
+              {runningAnalysis === "review" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <MessageSquare className="w-4 h-4 mr-2" />
+              )}
+              Reviewer AI
+            </Button>
+            <Button
+              onClick={handleRunFormatting}
+              disabled={!!runningAnalysis}
+              className="w-full"
+              variant="outline"
+              size="sm"
+            >
+              {runningAnalysis === "formatting" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Palette className="w-4 h-4 mr-2" />
+              )}
+              Format Document
+            </Button>
+            <Button
+              onClick={handleRunPlagiarism}
+              disabled={!!runningAnalysis}
+              className="w-full"
+              variant="outline"
+              size="sm"
+            >
+              {runningAnalysis === "plagiarism" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 mr-2" />
+              )}
+              Plagiarism Check
+            </Button>
+            <div className="border-t border-border pt-2 mt-1">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Export</p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => handleExport("ieee", "docx")}
+                  disabled={!!runningAnalysis}
+                  className="flex-1"
+                  variant="default"
+                  size="sm"
+                >
+                  {runningAnalysis === "export" ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1" />
+                  )}
+                  DOCX
+                </Button>
+                <Button
+                  onClick={() => handleExport("ieee", "pdf")}
+                  disabled={!!runningAnalysis}
+                  className="flex-1"
+                  variant="default"
+                  size="sm"
+                >
+                  {runningAnalysis === "export" ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-1" />
+                  )}
+                  PDF
+                </Button>
+              </div>
+            </div>
+            {analysisError && (
+              <p className="text-sm text-destructive mt-2">{analysisError}</p>
             )}
           </CardContent>
         </Card>
       </div>
 
+      {/* Citation Report Summary */}
+      {citationReport && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              Citation Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricCard
+                label="Total Citations"
+                value={citationReport.total_citations}
+                icon={BookOpen}
+              />
+              <MetricCard
+                label="Total References"
+                value={citationReport.total_references}
+                icon={FileText}
+              />
+              <MetricCard
+                label="Resolved"
+                value={citationReport.resolved_citations}
+                icon={CheckCircle2}
+              />
+              <MetricCard
+                label="Health Score"
+                value={`${citationReport.health_score?.overall ?? 0}%`}
+                icon={AlertTriangle}
+              />
+            </div>
+            {citationReport.issues.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Issues Found</p>
+                <div className="space-y-1">
+                  {citationReport.issues.slice(0, 5).map((issue, i) => (
+                    <p key={i} className="text-xs text-muted-foreground">
+                      <span className={`font-medium ${issue.severity === "error" ? "text-destructive" : issue.severity === "warning" ? "text-yellow-500" : ""}`}>
+                        {issue.severity.toUpperCase()}:
+                      </span>{" "}
+                      {issue.message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Compliance Report Summary */}
+      {complianceReport && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Shield className="w-4 h-4" />
+              Compliance Report — {complianceReport.journal_name}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricCard
+                label="Overall Score"
+                value={`${complianceReport.score?.overall ?? 0}%`}
+                icon={Shield}
+              />
+              <MetricCard
+                label="Checks Performed"
+                value={complianceReport.checks_performed}
+                icon={Hash}
+              />
+              <MetricCard
+                label="Passed"
+                value={complianceReport.checks_passed}
+                icon={CheckCircle2}
+              />
+              <MetricCard
+                label="Failed"
+                value={complianceReport.checks_failed}
+                icon={AlertTriangle}
+              />
+            </div>
+            {complianceReport.issues.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Issues Found</p>
+                <div className="space-y-1">
+                  {complianceReport.issues.slice(0, 5).map((issue, i) => (
+                    <p key={i} className="text-xs text-muted-foreground">
+                      <span className={`font-medium ${issue.status === "fail" ? "text-destructive" : issue.status === "warn" ? "text-yellow-500" : "text-green-500"}`}>
+                        {issue.status.toUpperCase()}:
+                      </span>{" "}
+                      {issue.message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Review Report Summary */}
+      {reviewReport && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Review Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricCard
+                label="Readiness"
+                value={`${reviewReport.publication_readiness?.overall ?? 0}%`}
+                icon={MessageSquare}
+                description={reviewReport.publication_readiness?.label}
+              />
+              <MetricCard
+                label="Critical"
+                value={reviewReport.critical_count}
+                icon={AlertTriangle}
+              />
+              <MetricCard
+                label="Major"
+                value={reviewReport.major_count}
+                icon={AlertCircle}
+              />
+              <MetricCard
+                label="Minor"
+                value={reviewReport.minor_count}
+                icon={CheckCircle2}
+              />
+            </div>
+            {reviewReport.strengths.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-muted-foreground mb-1">Strengths</p>
+                <div className="space-y-1">
+                  {reviewReport.strengths.slice(0, 3).map((s, i) => (
+                    <p key={i} className="text-xs text-muted-foreground">
+                      <span className="font-medium text-green-500">{s.title}:</span> {s.description}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Structure Summary */}
       {sections.length > 0 && (
         <SectionSummaryCard sections={sections} />
+      )}
+
+      {/* Plagiarism Report Summary */}
+      {plagiarismReport && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Plagiarism Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <MetricCard label="Similar Documents" value={plagiarismMatches.length} icon={FileText} />
+              <MetricCard label="Max Similarity" value={`${Math.round(plagiarismMaxScore * 100)}%`} icon={AlertTriangle} />
+              <MetricCard label="Corpus Checked" value={plagiarismMatches.length > 0 ? `${plagiarismMatches.length} docs` : "—"} icon={BookOpen} />
+              <MetricCard label="Risk Level" value={plagiarismMaxScore > 0.7 ? "High" : plagiarismMaxScore > 0.4 ? "Medium" : "Low"} icon={CheckCircle2} />
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Abstract */}

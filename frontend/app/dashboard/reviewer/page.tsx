@@ -8,7 +8,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { Document } from "@/types";
+import { Document, ReviewReport } from "@/types";
 import {
   MessageSquare,
   FileText,
@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   ChevronRight,
   BarChart3,
+  AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -49,18 +50,23 @@ export default function ReviewerPage() {
     fetchDocuments();
   }, [fetchDocuments]);
 
-  const docsWithReviews = documents.filter((d) => d.review_report);
+  const getReviewReport = (doc: Document): ReviewReport | undefined => {
+    const parsed = doc.parsed_json as Record<string, unknown> | undefined;
+    return parsed?.review_report as ReviewReport | undefined;
+  };
+
+  const docsWithReviews = documents.filter((d) => getReviewReport(d));
   const avgReadiness =
     docsWithReviews.length > 0
       ? Math.round(
           docsWithReviews.reduce(
-            (sum, d) => sum + (d.review_report?.publication_readiness?.overall || 0),
+            (sum, d) => sum + (getReviewReport(d)?.publication_readiness?.overall || 0),
             0
           ) / docsWithReviews.length
         )
       : 0;
   const totalCritical = docsWithReviews.reduce(
-    (sum, d) => sum + (d.review_report?.critical_count || 0),
+    (sum, d) => sum + (getReviewReport(d)?.critical_count || 0),
     0
   );
 
@@ -70,9 +76,7 @@ export default function ReviewerPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          Reviewer AI
-        </h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Reviewer AI</h1>
         <p className="text-muted-foreground mt-1 font-medium">
           Get pre-submission review feedback on your manuscripts.
         </p>
@@ -125,7 +129,7 @@ export default function ReviewerPage() {
           ) : (
             <div className="space-y-3">
               {documents.map((doc) => {
-                const report = doc.review_report;
+                const report = getReviewReport(doc);
                 return (
                   <Link
                     key={doc.id}
@@ -137,15 +141,18 @@ export default function ReviewerPage() {
                         <FileText className="w-4 h-4 text-muted-foreground" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {doc.filename}
-                        </p>
+                        <p className="text-sm font-medium text-foreground truncate">{doc.filename}</p>
                         <div className="flex items-center gap-3 mt-1">
                           <StatusBadge status={doc.status} />
                           {report && (
                             <span className="text-xs text-muted-foreground">
                               Readiness: {report.publication_readiness?.overall ?? "—"}% |{" "}
                               {report.publication_readiness?.label ?? "—"}
+                            </span>
+                          )}
+                          {!report && (
+                            <span className="text-xs text-muted-foreground italic">
+                              No review report — run analysis
                             </span>
                           )}
                         </div>
@@ -171,6 +178,7 @@ export default function ReviewerPage() {
             research clarity, methodology, literature coverage, citation completeness, and
             research gaps. It generates a structured review with strengths, weaknesses,
             and improvement suggestions to help you prepare for submission.
+            Open a document and click &quot;Reviewer AI&quot; to run the analysis.
           </p>
         </CardContent>
       </Card>

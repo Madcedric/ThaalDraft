@@ -42,13 +42,10 @@ def _validate_structured_data(
 
     if not sections:
         issues.append("No sections found")
-
     if not references:
         warnings.append("No references found")
-
     if not authors:
         warnings.append("No authors listed")
-
     if template.requires_keywords and not keywords:
         warnings.append(f"{template.name} requires keywords")
 
@@ -65,16 +62,21 @@ def _validate_structured_data(
     )
 
 
+def _get_authors_list(structured_data: Dict) -> List[str]:
+    authors = structured_data.get("authors", [])
+    if isinstance(authors, list) and len(authors) > 0:
+        if isinstance(authors[0], dict):
+            return [a.get("name", str(a)) for a in authors]
+        return [str(a) for a in authors]
+    return []
+
+
 def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    try:
-        from docx import Document
-        from docx.shared import Pt, Inches
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-    except ImportError:
-        raise RuntimeError("python-docx is required for DOCX generation")
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     doc = Document()
-
     for section in doc.sections:
         section.top_margin = Inches(template.margins.top_inches)
         section.bottom_margin = Inches(template.margins.bottom_inches)
@@ -93,21 +95,16 @@ def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
         run.font.size = Pt(template.title_font.size_pt)
         run.bold = template.title_font.bold
 
-    if structured_data.get("authors"):
-        authors = structured_data["authors"]
-        if isinstance(authors, list) and len(authors) > 0:
-            if isinstance(authors[0], dict):
-                author_names = [a.get("name", str(a)) for a in authors]
-            else:
-                author_names = [str(a) for a in authors]
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.add_run(", ".join(author_names)).font.size = Pt(11)
+    author_names = _get_authors_list(structured_data)
+    if author_names:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(", ".join(author_names)).font.size = Pt(11)
 
     if structured_data.get("abstract"):
         doc.add_paragraph()
         p = doc.add_paragraph()
-        r1 = p.add_run(f"{template.abstract_label}\u2014")
+        r1 = p.add_run("Abstract\u2014")
         r1.bold = True
         r1.italic = True
         r2 = p.add_run(structured_data["abstract"])
@@ -125,8 +122,9 @@ def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
         if heading:
             roman = roman_numerals[idx] if idx < len(roman_numerals) else str(idx + 1)
             p = doc.add_paragraph(f"{roman}. {heading}")
-            p.runs[0].bold = True if p.runs else None
-            p.runs[0].font.size = Pt(template.headings[0].font_size_pt) if p.runs else None
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(template.headings[0].font_size_pt)
 
         content = section.get("content", "") if isinstance(section, dict) else ""
         if content:
@@ -137,10 +135,7 @@ def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
         doc.add_paragraph(template.references_label.upper())
         refs = structured_data["references"]
         for idx, ref in enumerate(refs):
-            if isinstance(ref, dict):
-                ref_text = ref.get("raw_text", str(ref))
-            else:
-                ref_text = str(ref)
+            ref_text = ref.get("raw_text", str(ref)) if isinstance(ref, dict) else str(ref)
             p = doc.add_paragraph(f"[{idx+1}] {ref_text}")
             p.paragraph_format.left_indent = Inches(0.25)
             p.paragraph_format.first_line_indent = Inches(-0.25)
@@ -149,23 +144,347 @@ def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
 
 
 def _build_acm_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    return _build_ieee_docx(structured_data, template)
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(template.margins.top_inches)
+        section.bottom_margin = Inches(template.margins.bottom_inches)
+        section.left_margin = Inches(template.margins.left_inches)
+        section.right_margin = Inches(template.margins.right_inches)
 
-def _build_springer_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    return _build_ieee_docx(structured_data, template)
+    style = doc.styles["Normal"]
+    style.font.name = template.body_font.name
+    style.font.size = Pt(template.body_font.size_pt)
+    style.paragraph_format.space_after = Pt(6)
+
+    if structured_data.get("title"):
+        p = doc.add_paragraph(structured_data["title"])
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.runs[0] if p.runs else p.add_run()
+        run.font.name = template.title_font.name
+        run.font.size = Pt(template.title_font.size_pt)
+        run.bold = template.title_font.bold
+
+    author_names = _get_authors_list(structured_data)
+    if author_names:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(", ".join(author_names)).font.size = Pt(10)
+
+    if structured_data.get("abstract"):
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r1 = p.add_run("Abstract: ")
+        r1.bold = True
+        r2 = p.add_run(structured_data["abstract"])
+        r2.italic = True
+        r2.font.size = Pt(9)
+
+    if structured_data.get("keywords") and template.requires_keywords:
+        p = doc.add_paragraph()
+        r1 = p.add_run(f"{template.keywords_label}: ")
+        r1.bold = True
+        p.add_run(", ".join(structured_data["keywords"]))
+
+    for idx, section in enumerate(structured_data.get("sections", [])):
+        heading = section.get("heading", "") if isinstance(section, dict) else ""
+        if heading:
+            p = doc.add_paragraph(heading)
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(template.headings[0].font_size_pt)
+            p.paragraph_format.space_before = Pt(12)
+            p.paragraph_format.space_after = Pt(6)
+
+        content = section.get("content", "") if isinstance(section, dict) else ""
+        if content:
+            doc.add_paragraph(content)
+
+    if structured_data.get("references"):
+        doc.add_paragraph(template.references_label)
+        refs = structured_data["references"]
+        for idx, ref in enumerate(refs):
+            ref_text = ref.get("raw_text", str(ref)) if isinstance(ref, dict) else str(ref)
+            p = doc.add_paragraph(f"{idx+1}. {ref_text}")
+            p.paragraph_format.left_indent = Inches(0.5)
+            p.paragraph_format.first_line_indent = Inches(-0.5)
+
+    return doc
 
 
 def _build_apa_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    return _build_ieee_docx(structured_data, template)
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(template.margins.top_inches)
+        section.bottom_margin = Inches(template.margins.bottom_inches)
+        section.left_margin = Inches(template.margins.left_inches)
+        section.right_margin = Inches(template.margins.right_inches)
+
+    style = doc.styles["Normal"]
+    style.font.name = template.body_font.name
+    style.font.size = Pt(template.body_font.size_pt)
+    style.paragraph_format.line_spacing = 2.0
+
+    if structured_data.get("title"):
+        p = doc.add_paragraph(structured_data["title"])
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.runs[0] if p.runs else p.add_run()
+        run.bold = True
+        run.font.size = Pt(template.title_font.size_pt)
+
+    author_names = _get_authors_list(structured_data)
+    if author_names:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(", ".join(author_names)).font.size = Pt(12)
+
+    if structured_data.get("abstract"):
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r1 = p.add_run("Abstract")
+        r1.bold = True
+        doc.add_paragraph(structured_data["abstract"])
+
+    for idx, section in enumerate(structured_data.get("sections", [])):
+        heading = section.get("heading", "") if isinstance(section, dict) else ""
+        if heading:
+            p = doc.add_paragraph(heading)
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(template.headings[0].font_size_pt)
+                p.runs[0].underline = True
+            p.paragraph_format.space_before = Pt(12)
+            p.paragraph_format.space_after = Pt(6)
+
+        content = section.get("content", "") if isinstance(section, dict) else ""
+        if content:
+            p = doc.add_paragraph(content)
+            p.paragraph_format.first_line_indent = Inches(0.5)
+
+    if structured_data.get("references"):
+        doc.add_paragraph()
+        p = doc.add_paragraph(template.references_label)
+        if p.runs:
+            p.runs[0].bold = True
+            p.runs[0].font.size = Pt(14)
+
+        refs = structured_data["references"]
+        for ref in refs:
+            ref_text = ref.get("raw_text", str(ref)) if isinstance(ref, dict) else str(ref)
+            p = doc.add_paragraph(ref_text)
+            p.paragraph_format.left_indent = Inches(0.5)
+            p.paragraph_format.first_line_indent = Inches(-0.5)
+
+    return doc
+
+
+def _build_springer_docx(structured_data: Dict, template: FormatTemplate) -> Any:
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(template.margins.top_inches)
+        section.bottom_margin = Inches(template.margins.bottom_inches)
+        section.left_margin = Inches(template.margins.left_inches)
+        section.right_margin = Inches(template.margins.right_inches)
+
+    style = doc.styles["Normal"]
+    style.font.name = template.body_font.name
+    style.font.size = Pt(template.body_font.size_pt)
+
+    if structured_data.get("title"):
+        p = doc.add_paragraph(structured_data["title"])
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.runs[0] if p.runs else p.add_run()
+        run.font.name = template.title_font.name
+        run.font.size = Pt(template.title_font.size_pt)
+        run.bold = template.title_font.bold
+
+    author_names = _get_authors_list(structured_data)
+    if author_names:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(", ".join(author_names)).font.size = Pt(10)
+
+    if structured_data.get("abstract"):
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r1 = p.add_run("Abstract ")
+        r1.bold = True
+        p.add_run(structured_data["abstract"])
+
+    if structured_data.get("keywords") and template.requires_keywords:
+        p = doc.add_paragraph()
+        r1 = p.add_run(f"{template.keywords_label}: ")
+        r1.bold = True
+        p.add_run(", ".join(structured_data["keywords"]))
+
+    for idx, section in enumerate(structured_data.get("sections", [])):
+        heading = section.get("heading", "") if isinstance(section, dict) else ""
+        if heading:
+            p = doc.add_paragraph(heading)
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(template.headings[0].font_size_pt)
+
+        content = section.get("content", "") if isinstance(section, dict) else ""
+        if content:
+            doc.add_paragraph(content)
+
+    if structured_data.get("references"):
+        doc.add_paragraph(template.references_label)
+        refs = structured_data["references"]
+        for idx, ref in enumerate(refs):
+            ref_text = ref.get("raw_text", str(ref)) if isinstance(ref, dict) else str(ref)
+            p = doc.add_paragraph(f"{idx+1}. {ref_text}")
+            p.paragraph_format.left_indent = Inches(0.25)
+            p.paragraph_format.first_line_indent = Inches(-0.25)
+
+    return doc
+
+
+def _build_elsevier_docx(structured_data: Dict, template: FormatTemplate) -> Any:
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(template.margins.top_inches)
+        section.bottom_margin = Inches(template.margins.bottom_inches)
+        section.left_margin = Inches(template.margins.left_inches)
+        section.right_margin = Inches(template.margins.right_inches)
+
+    style = doc.styles["Normal"]
+    style.font.name = template.body_font.name
+    style.font.size = Pt(template.body_font.size_pt)
+
+    if structured_data.get("title"):
+        p = doc.add_paragraph(structured_data["title"])
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.runs[0] if p.runs else p.add_run()
+        run.font.name = template.title_font.name
+        run.font.size = Pt(template.title_font.size_pt)
+        run.bold = template.title_font.bold
+
+    author_names = _get_authors_list(structured_data)
+    if author_names:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(", ".join(author_names)).font.size = Pt(11)
+
+    if structured_data.get("abstract"):
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r1 = p.add_run("Abstract\n")
+        r1.bold = True
+        p.add_run(structured_data["abstract"])
+
+    if structured_data.get("keywords") and template.requires_keywords:
+        p = doc.add_paragraph()
+        r1 = p.add_run(f"{template.keywords_label}: ")
+        r1.bold = True
+        p.add_run("; ".join(structured_data["keywords"]))
+
+    for idx, section in enumerate(structured_data.get("sections", [])):
+        heading = section.get("heading", "") if isinstance(section, dict) else ""
+        if heading:
+            p = doc.add_paragraph(heading)
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(template.headings[0].font_size_pt)
+
+        content = section.get("content", "") if isinstance(section, dict) else ""
+        if content:
+            p = doc.add_paragraph(content)
+
+    if structured_data.get("references"):
+        doc.add_paragraph(template.references_label)
+        refs = structured_data["references"]
+        for idx, ref in enumerate(refs):
+            ref_text = ref.get("raw_text", str(ref)) if isinstance(ref, dict) else str(ref)
+            p = doc.add_paragraph(f"{idx+1}. {ref_text}")
+
+    return doc
 
 
 def _build_mla_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    return _build_ieee_docx(structured_data, template)
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin = Inches(template.margins.top_inches)
+        section.bottom_margin = Inches(template.margins.bottom_inches)
+        section.left_margin = Inches(template.margins.left_inches)
+        section.right_margin = Inches(template.margins.right_inches)
 
-def _build_nature_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    return _build_ieee_docx(structured_data, template)
+    style = doc.styles["Normal"]
+    style.font.name = template.body_font.name
+    style.font.size = Pt(template.body_font.size_pt)
+    style.paragraph_format.line_spacing = 2.0
+
+    if structured_data.get("title"):
+        p = doc.add_paragraph(structured_data["title"])
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.runs[0] if p.runs else p.add_run()
+        run.bold = True
+        run.font.size = Pt(template.title_font.size_pt)
+
+    author_names = _get_authors_list(structured_data)
+    if author_names:
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.add_run(", ".join(author_names)).font.size = Pt(12)
+
+    if structured_data.get("abstract"):
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        r1 = p.add_run("Abstract: ")
+        r1.bold = True
+        r2 = p.add_run(structured_data["abstract"])
+        r2.italic = True
+
+    for idx, section in enumerate(structured_data.get("sections", [])):
+        heading = section.get("heading", "") if isinstance(section, dict) else ""
+        if heading:
+            p = doc.add_paragraph(heading)
+            if p.runs:
+                p.runs[0].bold = True
+                p.runs[0].font.size = Pt(template.headings[0].font_size_pt)
+            p.paragraph_format.space_before = Pt(12)
+            p.paragraph_format.space_after = Pt(6)
+
+        content = section.get("content", "") if isinstance(section, dict) else ""
+        if content:
+            p = doc.add_paragraph(content)
+            p.paragraph_format.first_line_indent = Inches(0.5)
+
+    if structured_data.get("references"):
+        doc.add_paragraph()
+        p = doc.add_paragraph(template.references_label)
+        if p.runs:
+            p.runs[0].bold = True
+            p.runs[0].font.size = Pt(14)
+
+        refs = structured_data["references"]
+        for ref in refs:
+            ref_text = ref.get("raw_text", str(ref)) if isinstance(ref, dict) else str(ref)
+            p = doc.add_paragraph(ref_text)
+            p.paragraph_format.left_indent = Inches(0.5)
+            p.paragraph_format.first_line_indent = Inches(-0.5)
+
+    return doc
 
 
 DOCX_BUILDERS = {
@@ -174,7 +493,7 @@ DOCX_BUILDERS = {
     "springer": _build_springer_docx,
     "apa": _build_apa_docx,
     "mla": _build_mla_docx,
-    "nature": _build_nature_docx,
+    "nature": _build_elsevier_docx,
 }
 
 

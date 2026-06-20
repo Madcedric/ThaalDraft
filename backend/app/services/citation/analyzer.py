@@ -41,11 +41,17 @@ def analyze_citations(
     citations, ref_validations, issues = validate_citations(citations, references)
 
     if resolve_dois:
+        max_doi_resolves = 10
+        doi_count = 0
         for i, ref_val in enumerate(ref_validations):
+            if doi_count >= max_doi_resolves:
+                logger.info(f"DOI resolution: hit limit of {max_doi_resolves}, skipping remaining")
+                break
             if not ref_val.doi and ref_val.raw_text:
                 try:
                     result = resolve_reference_doi(raw_text=ref_val.raw_text)
                     api_calls += 1
+                    doi_count += 1
                     if result and result.get("doi"):
                         ref_validations[i].doi = result["doi"]
                         ref_validations[i].is_valid_doi = True

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import FileResponse
 from typing import Dict, List, Optional
 from app.services.submission import (
     PackageBuildRequest,
@@ -9,6 +10,8 @@ from app.services.submission import (
 )
 from app.services import document_service
 from app.api.routes.auth import get_current_user
+import os
+import zipfile
 
 router = APIRouter()
 
@@ -60,6 +63,11 @@ async def build_submission(
             conflict_statement=request.conflict_statement,
         )
 
+        zip_path = _create_zip(package, document_id)
+        if zip_path:
+            package.zip_path = zip_path
+            package.zip_size = os.path.getsize(zip_path) if os.path.exists(zip_path) else None
+
         _packages_store[document_id] = package
 
         total = len(package.components)
@@ -78,6 +86,23 @@ async def build_submission(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _create_zip(package: SubmissionPackage, document_id: str) -> Optional[str]:
+    output_dir = "submission_packages"
+    zip_path = os.path.join(output_dir, f"{document_id}_submission.zip")
+    os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for comp in package.components:
+                if comp.status == "completed" and comp.file_path and os.path.exists(comp.file_path):
+                    arcname = comp.filename or os.path.basename(comp.file_path)
+                    zf.write(comp.file_path, arcname)
+        return zip_path
+    except Exception as e:
+        print(f"ZIP creation failed: {e}")
+        return None
 
 
 @router.get("/{document_id}/submission")
@@ -113,6 +138,48 @@ async def get_submission_package(
             failed_components=failed,
             overall_progress=round(progress, 1),
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{document_id}/submission/download-zip")
+async def download_submission_zip(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download the submission package as a ZIP file."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        package = _packages_store.get(document_id)
+        if not package:
+            raise HTTPException(status_code=404, detail="No submission package found. Build one first.")
+
+        if package.zip_path and os.path.exists(package.zip_path):
+            return FileResponse(
+                path=package.zip_path,
+                filename=f"{document_id}_submission.zip",
+                media_type="application/zip",
+            )
+
+        zip_path = _create_zip(package, document_id)
+        if zip_path and os.path.exists(zip_path):
+            package.zip_path = zip_path
+            package.zip_size = os.path.getsize(zip_path)
+            return FileResponse(
+                path=zip_path,
+                filename=f"{document_id}_submission.zip",
+                media_type="application/zip",
+            )
+
+        raise HTTPException(status_code=500, detail="Failed to create ZIP package")
     except HTTPException:
         raise
     except Exception as e:

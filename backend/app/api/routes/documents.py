@@ -8,15 +8,18 @@ from app.services.auth import get_current_user
 from app.services import storage_service, document_service, job_service
 from app.services import plagiarism_service
 from app.services import struct_service
+from app.services.manuscript.engine import build_manuscript
 import os
 import time
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/upload", response_model=DocumentMeta)
 async def upload_document(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload a document for processing. Supports DOCX, PDF, LaTeX, and Markdown."""
+    """Upload a document and parse it. Heavy analyses (citations, compliance, review) run on-demand."""
     file_path = await save_upload_file(file)
     size = os.path.getsize(file_path)
     ext = get_file_extension(file_path)
@@ -33,36 +36,41 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
 
         safe_filename = file.filename or filename or "unnamed"
 
-        # Ensure user exists in users table (FK constraint requires it)
         document_service.ensure_user_exists(user_id, user_email)
+
+        file_ext = ext.lstrip(".")
+        structured_data = struct_service.normalize_classification(parsed_data, file_type=file_ext)
+
+        manuscript = build_manuscript(structured_data)
+        structured_data["manuscript_model"] = manuscript.model_dump()
 
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
             "storage_path": storage_path,
-            "status": "parsed",
+            "status": "structured",
             "size_bytes": size,
-            "parsed_json": parsed_data,
+            "parsed_json": structured_data,
         }
-        print(f"UPLOAD: user_id={user_id}, filename={safe_filename}, size={size}")
         created = document_service.create_document_record(doc_payload)
 
         doc_id = created.get("id")
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
-        print(f"UPLOAD: document_id={doc_id}, status={created.get('status')}")
+        logger.info(f"UPLOAD: Document {doc_id} uploaded and parsed ({size} bytes)")
+
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
             storage_path=created.get("storage_path"),
-            status=created.get("status", "parsed"),
-            size_bytes=created.get("size_bytes")
+            status="structured",
+            size_bytes=created.get("size_bytes"),
         )
     except HTTPException:
         raise
     except Exception as e:
-        print(f"UPLOAD ERROR: {e}")
+        logger.error(f"UPLOAD ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -170,6 +178,54 @@ async def validate_structure_endpoint(payload: dict, current_user: dict = Depend
         raise HTTPException(status_code=400, detail=f"Validation failed: {str(e)}")
 
 
+@router.post("/{document_id}/plagiarism/analyze")
+async def analyze_plagiarism(document_id: str, current_user: dict = Depends(get_current_user)):
+    """Run plagiarism analysis synchronously against other documents in the corpus."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        parsed = doc.get("parsed_json") or {}
+        if not parsed:
+            raise HTTPException(status_code=400, detail="Document has not been parsed yet")
+
+        parts = []
+        if parsed.get("title"):
+            parts.append(parsed.get("title"))
+        if parsed.get("abstract"):
+            parts.append(parsed.get("abstract"))
+        for s in parsed.get("sections", []):
+            if isinstance(s, dict):
+                parts.append(s.get("heading", ""))
+                parts.append(s.get("content", ""))
+        target_text = "\n".join([p for p in parts if p])
+
+        if not target_text.strip():
+            raise HTTPException(status_code=400, detail="No text content to analyze")
+
+        corpus = document_service.list_documents_texts(exclude_document_id=document_id, limit=200)
+        matches = plagiarism_service.check_against_corpus(target_text, corpus, top_n=10)
+        report = {"matches": matches}
+        rec = plagiarism_service.create_plagiarism_record(document_id, report)
+
+        existing = doc.get("parsed_json") or {}
+        existing["plagiarism_report"] = rec
+        document_service.update_document(
+            document_id,
+            {"parsed_json": existing, "updated_at": datetime.utcnow().isoformat() + "Z"},
+        )
+
+        return {"document_id": document_id, "report": rec, "status": "completed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/{document_id}/plagiarism")
 async def get_plagiarism(document_id: str, current_user: dict = Depends(get_current_user)):
     """Get plagiarism reports for a document."""
@@ -221,6 +277,32 @@ async def list_documents(
         user_id = current_user.get("id")
         documents = document_service.list_documents_for_user(user_id, limit=limit, offset=offset)
         return {"documents": documents, "limit": limit, "offset": offset}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{document_id}")
+async def update_document(document_id: str, payload: dict, current_user: dict = Depends(get_current_user)):
+    """Update document fields (e.g., selected_journal, status)."""
+    try:
+        doc = document_service.get_document(document_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        if doc.get("user_id") != current_user.get("id"):
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        allowed_fields = {"selected_journal", "status", "filename"}
+        updates = {k: v for k, v in payload.items() if k in allowed_fields}
+        if not updates:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+
+        updates["updated_at"] = datetime.utcnow().isoformat() + "Z"
+        document_service.update_document(document_id, updates)
+        updated_doc = document_service.get_document(document_id)
+        return updated_doc
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -13,7 +13,7 @@ async def analyze_document_citations(
     document_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Run full citation analysis on a structured document."""
+    """Run citation analysis on a structured document. DOI resolution is off by default (slow)."""
     try:
         doc = document_service.get_document(document_id)
         if not doc:
