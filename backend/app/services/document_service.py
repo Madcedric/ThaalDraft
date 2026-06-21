@@ -144,27 +144,30 @@ def get_document(document_id: str) -> Optional[Dict]:
         if res.status_code == 200 and res.json():
             doc = res.json()[0]
             
-            # Rebuild parsed_json from normalized tables
-            parsed_json = {}
-            m_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/manuscripts?document_id=eq.{document_id}&select=*"
-            m_res = requests.get(m_url, headers=headers, timeout=10)
-            if m_res.status_code == 200 and m_res.json():
-                manuscript = m_res.json()[0]
-                manuscript_id = manuscript.get("id")
-                
-                parsed_json["title"] = manuscript.get("title")
-                parsed_json["abstract"] = manuscript.get("abstract")
-                parsed_json["authors"] = manuscript.get("authors") or []
-                
-                s_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/sections?manuscript_id=eq.{manuscript_id}&order=order_index.asc&select=*"
-                s_res = requests.get(s_url, headers=headers, timeout=10)
-                if s_res.status_code == 200:
-                    parsed_json["sections"] = s_res.json()
+            # Use parsed_json directly from the document row
+            parsed_json = doc.get("parsed_json") or {}
+            
+            # If parsed_json is empty, try to rebuild from normalized tables
+            if not parsed_json.get("sections"):
+                m_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/manuscripts?document_id=eq.{document_id}&select=*"
+                m_res = requests.get(m_url, headers=headers, timeout=10)
+                if m_res.status_code == 200 and m_res.json():
+                    manuscript = m_res.json()[0]
+                    manuscript_id = manuscript.get("id")
                     
-                r_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/references_table?manuscript_id=eq.{manuscript_id}&select=*"
-                r_res = requests.get(r_url, headers=headers, timeout=10)
-                if r_res.status_code == 200:
-                    parsed_json["references"] = [r.get("raw_text") for r in r_res.json()]
+                    parsed_json["title"] = manuscript.get("title")
+                    parsed_json["abstract"] = manuscript.get("abstract")
+                    parsed_json["authors"] = manuscript.get("authors") or []
+                    
+                    s_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/sections?manuscript_id=eq.{manuscript_id}&order=section_order.asc&select=*"
+                    s_res = requests.get(s_url, headers=headers, timeout=10)
+                    if s_res.status_code == 200:
+                        parsed_json["sections"] = s_res.json()
+                        
+                    r_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/references_table?manuscript_id=eq.{manuscript_id}&select=*"
+                    r_res = requests.get(r_url, headers=headers, timeout=10)
+                    if r_res.status_code == 200:
+                        parsed_json["references"] = [r.get("raw_text") for r in r_res.json()]
             
             doc["parsed_json"] = parsed_json
             return doc
