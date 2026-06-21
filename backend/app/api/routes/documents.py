@@ -34,20 +34,30 @@ async def upload_document(
     try:
         document_service.ensure_user_exists(user_id, user_email)
         
+        safe_filename = file.filename or os.path.basename(file_path) or "unnamed"
         filename = os.path.basename(file_path)
         dest_path = f"{int(time.time())}_{filename}"
         storage_path = storage_service.upload_file_to_supabase(file_path, dest_path)
+        if not storage_path:
+            storage_path = f"local/{int(time.time())}_{filename}"
+            logger.warning(f"Storage upload failed, using fallback path: {storage_path}")
 
-        safe_filename = file.filename or filename or "unnamed"
+        # Parse immediately during upload so workspace has content
+        parsed_data = {}
+        try:
+            parsed_data = parse_document(file_path)
+            logger.info(f"PARSE: {safe_filename} → {len(parsed_data.get('sections', []))} sections")
+        except Exception as parse_err:
+            logger.error(f"PARSE ERROR during upload: {parse_err}")
 
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
             "storage_path": storage_path,
-            "status": "uploaded",
+            "status": "parsed" if parsed_data.get("sections") else "uploaded",
             "size_bytes": size,
             "mode": mode,
-            "parsed_json": {}
+            "parsed_json": parsed_data
         }
         created = document_service.create_document_record(doc_payload)
 
@@ -55,22 +65,13 @@ async def upload_document(
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
-        # Create parse job
-        job_payload = {
-            "document_id": doc_id,
-            "job_type": "parse",
-            "status": "queued",
-            "payload": {"file_path": file_path, "file_ext": ext.lstrip("."), "mode": mode}
-        }
-        job_service.create_job(job_payload)
-
-        logger.info(f"UPLOAD: Document {doc_id} uploaded (mode={mode}), parse job queued ({size} bytes)")
+        logger.info(f"UPLOAD: Document {doc_id} uploaded & parsed (mode={mode}, {size} bytes, {len(parsed_data.get('sections', []))} sections)")
 
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
             storage_path=storage_path,
-            status="uploaded",
+            status="parsed" if parsed_data.get("sections") else "uploaded",
             size_bytes=size,
         )
     except HTTPException:

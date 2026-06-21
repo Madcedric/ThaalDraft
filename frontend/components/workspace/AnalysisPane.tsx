@@ -1,5 +1,8 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Activity, BookOpen, AlertCircle, CheckCircle2, Download, FileText, Loader2, Send, Package } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface AnalysisPaneProps {
   healthScore: number;
@@ -28,6 +31,8 @@ const EXPORT_FORMATS = [
   { id: 'zip', label: 'ZIP Package', ext: '.zip' },
 ];
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
+
 export function AnalysisPane({
   healthScore,
   citationsCount,
@@ -38,6 +43,7 @@ export function AnalysisPane({
   onReconstruct,
   isReconstructing = false,
 }: AnalysisPaneProps) {
+  const { user } = useAuth();
   const [selectedTemplate, setSelectedTemplate] = useState('ieee');
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -45,24 +51,16 @@ export function AnalysisPane({
   const [submissionBuilt, setSubmissionBuilt] = useState(false);
 
   const handleExport = async (format: string) => {
-    if (!documentId) return;
+    if (!documentId || !user) return;
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const token = localStorage.getItem('firebase_id_token') || sessionStorage.getItem('firebase_id_token');
-      if (!token) { setExportMessage('Not authenticated'); return; }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/export`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ template: selectedTemplate, format }),
-        }
-      );
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_BASE}/api/v1/documents/${documentId}/export`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: selectedTemplate, format }),
+      });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -90,28 +88,20 @@ export function AnalysisPane({
   };
 
   const handleBuildSubmission = async () => {
-    if (!documentId) return;
+    if (!documentId || !user) return;
     setIsBuildingSubmission(true);
     setExportMessage(null);
     try {
-      const token = localStorage.getItem('firebase_id_token') || sessionStorage.getItem('firebase_id_token');
-      if (!token) { setExportMessage('Not authenticated'); return; }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/submission/build`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            journal_id: selectedTemplate,
-            template_id: selectedTemplate,
-            components: ['manuscript_docx', 'compliance_report', 'review_report', 'citation_report', 'cover_letter', 'author_statement', 'conflict_statement'],
-          }),
-        }
-      );
+      const token = await user.getIdToken();
+      const response = await fetch(`${API_BASE}/api/v1/documents/${documentId}/submission/build`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          journal_id: selectedTemplate,
+          template_id: selectedTemplate,
+          components: ['manuscript_docx', 'compliance_report', 'review_report', 'citation_report', 'cover_letter', 'author_statement', 'conflict_statement'],
+        }),
+      });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -121,11 +111,9 @@ export function AnalysisPane({
       setSubmissionBuilt(true);
       setExportMessage('Submission package built!');
 
-      // Auto-download ZIP
-      const zipResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/submission/download-zip`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const zipResponse = await fetch(`${API_BASE}/api/v1/documents/${documentId}/submission/download-zip`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (zipResponse.ok) {
         const blob = await zipResponse.blob();
         const url = URL.createObjectURL(blob);
@@ -143,26 +131,26 @@ export function AnalysisPane({
   };
 
   return (
-    <div className="w-72 h-full bg-zinc-900 border-l border-zinc-800 flex flex-col hidden lg:flex">
+    <div className="w-72 h-full bg-card border-l border-border flex flex-col hidden lg:flex">
       {/* Mode Selector */}
-      <div className="p-4 border-b border-zinc-800">
-        <div className="bg-zinc-950 p-1 rounded-lg flex text-xs font-medium border border-zinc-800/50">
+      <div className="p-4 border-b border-border">
+        <div className="bg-muted p-1 rounded-lg flex text-xs font-medium border border-border">
           <button
             onClick={() => onModeChange('reconstruction')}
-            className={`flex-1 py-1.5 px-2 rounded-md transition-all duration-200 ${
+            className={`flex-1 py-2 px-2 rounded-md transition-all duration-200 ${
               mode === 'reconstruction'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                ? 'bg-[#0F1B33] text-white shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background'
             }`}
           >
             Reconstruct
           </button>
           <button
             onClick={() => onModeChange('formatting')}
-            className={`flex-1 py-1.5 px-2 rounded-md transition-all duration-200 ${
+            className={`flex-1 py-2 px-2 rounded-md transition-all duration-200 ${
               mode === 'formatting'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                ? 'bg-[#D4AF37] text-[#0F1B33] shadow-sm font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-background'
             }`}
           >
             Format Studio
@@ -178,7 +166,7 @@ export function AnalysisPane({
             <button
               onClick={onReconstruct}
               disabled={isReconstructing}
-              className="w-full py-2.5 px-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-3 bg-[#0F1B33] hover:bg-[#1D2C4D] disabled:bg-muted disabled:text-muted-foreground text-white text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
             >
               {isReconstructing ? (
                 <>
@@ -194,42 +182,42 @@ export function AnalysisPane({
             </button>
 
             {/* Health Score */}
-            <div className="bg-zinc-950/50 border border-zinc-800/80 rounded-xl p-4 shadow-sm">
+            <div className="bg-muted/50 border border-border rounded-lg p-4 hover:border-[#D4AF37]/20 transition-colors">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 flex items-center">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center">
                   <Activity className="w-3.5 h-3.5 mr-1.5" />
                   Document Health
                 </h3>
-                <span className={`text-sm font-bold ${healthScore >= 80 ? 'text-emerald-400' : healthScore >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>
+                <span className={`text-sm font-bold ${healthScore >= 80 ? 'text-emerald-600' : healthScore >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
                   {healthScore}/100
                 </span>
               </div>
-              <div className="w-full bg-zinc-800 rounded-full h-1.5">
+              <div className="w-full bg-border rounded-full h-2">
                 <div
-                  className={`h-1.5 rounded-full ${healthScore >= 80 ? 'bg-emerald-500' : healthScore >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                  className={`h-2 rounded-full transition-all duration-500 ${healthScore >= 80 ? 'bg-emerald-500' : healthScore >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                   style={{ width: `${healthScore}%` }}
                 />
               </div>
             </div>
 
             {/* Citations */}
-            <div className="bg-zinc-950/50 border border-zinc-800/80 rounded-xl p-4 shadow-sm">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 flex items-center mb-3">
+            <div className="bg-muted/50 border border-border rounded-lg p-4 hover:border-[#D4AF37]/20 transition-colors">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center mb-3">
                 <BookOpen className="w-3.5 h-3.5 mr-1.5" />
                 Citations
               </h3>
               <div className="flex items-end justify-between">
                 <div>
-                  <div className="text-2xl font-semibold text-zinc-200">{citationsCount}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">Total References</div>
+                  <div className="text-2xl font-semibold text-foreground">{citationsCount}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Total References</div>
                 </div>
                 {issuesCount > 0 ? (
-                  <div className="flex items-center text-xs font-medium text-rose-400 bg-rose-400/10 px-2 py-1 rounded-md">
+                  <div className="flex items-center text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded-full">
                     <AlertCircle className="w-3 h-3 mr-1" />
                     {issuesCount} Issues
                   </div>
                 ) : (
-                  <div className="flex items-center text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md">
+                  <div className="flex items-center text-xs font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
                     <CheckCircle2 className="w-3 h-3 mr-1" />
                     All Valid
                   </div>
@@ -243,8 +231,8 @@ export function AnalysisPane({
         {mode === 'formatting' && (
           <>
             {/* Template Picker */}
-            <div className="bg-zinc-950/50 border border-zinc-800/80 rounded-xl p-4 shadow-sm">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 flex items-center mb-3">
+            <div className="bg-muted/50 border border-border rounded-lg p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center mb-3">
                 <FileText className="w-3.5 h-3.5 mr-1.5" />
                 Journal Template
               </h3>
@@ -253,10 +241,10 @@ export function AnalysisPane({
                   <button
                     key={t.id}
                     onClick={() => setSelectedTemplate(t.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-150 ${
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
                       selectedTemplate === t.id
-                        ? 'bg-purple-600/20 border border-purple-500/30 text-purple-300'
-                        : 'bg-zinc-800/50 border border-transparent text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                        ? 'bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[#0F1B33] font-medium shadow-sm'
+                        : 'bg-background border border-border text-muted-foreground hover:bg-muted hover:text-foreground hover:border-[#D4AF37]/20'
                     }`}
                   >
                     <div className="font-medium">{t.name}</div>
@@ -267,8 +255,8 @@ export function AnalysisPane({
             </div>
 
             {/* Export Buttons */}
-            <div className="bg-zinc-950/50 border border-zinc-800/80 rounded-xl p-4 shadow-sm">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 flex items-center mb-3">
+            <div className="bg-muted/50 border border-border rounded-lg p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center mb-3">
                 <Download className="w-3.5 h-3.5 mr-1.5" />
                 Export
               </h3>
@@ -278,19 +266,19 @@ export function AnalysisPane({
                     key={f.id}
                     onClick={() => handleExport(f.id)}
                     disabled={isExporting || !documentId}
-                    className="w-full py-2 px-3 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-200 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 border border-zinc-700"
+                    className="w-full py-2.5 px-3 bg-card hover:bg-muted disabled:bg-muted disabled:text-muted-foreground text-foreground text-sm font-medium rounded-lg transition-all duration-200 flex items-center justify-center gap-2 border border-border hover:border-[#D4AF37]/30 hover:shadow-sm"
                   >
                     {isExporting ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <Download className="w-4 h-4" />
                     )}
-                    {f.label} <span className="text-zinc-500 text-xs">{f.ext}</span>
+                    {f.label} <span className="text-muted-foreground text-xs">{f.ext}</span>
                   </button>
                 ))}
               </div>
               {exportMessage && (
-                <p className={`text-xs mt-2 text-center ${exportMessage.includes('failed') ? 'text-rose-400' : 'text-emerald-400'}`}>
+                <p className={`text-xs mt-2 text-center ${exportMessage.includes('failed') ? 'text-red-600' : 'text-emerald-600'}`}>
                   {exportMessage}
                 </p>
               )}
@@ -300,7 +288,7 @@ export function AnalysisPane({
             <button
               onClick={handleBuildSubmission}
               disabled={!documentId || isBuildingSubmission}
-              className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-3 bg-[#D4AF37] hover:bg-[#D4AF37]/90 disabled:bg-muted disabled:text-muted-foreground text-[#0F1B33] text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
             >
               {isBuildingSubmission ? (
                 <>

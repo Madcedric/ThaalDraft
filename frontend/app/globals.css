@@ -4,39 +4,49 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ThaalDraft — Brand Design System
+   Primary Navy: #0F1B33 | Secondary Navy: #1D2C4D
+   Accent Gold: #D4AF37 | Light Gold: #F2D28B
+   Background: #F8F6F2 | Surface: #E5E7EB
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --accent: #f1f5f9;
-  --accent-foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --border: #e2e8f0;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #0f172a;
-  --destructive: #dc2626;
-  --input: #e2e8f0;
-  --ring: #2563eb;
-  --chart-1: #2563eb;
-  --chart-2: #16a34a;
-  --chart-3: #f59e0b;
-  --chart-4: #dc2626;
-  --chart-5: #8b5cf6;
-  --radius: 0.625rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2563eb;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #2563eb;
+  /* Core */
+  --background: #F8F6F2;
+  --foreground: #111827;
+  --primary: #D4AF37;
+  --primary-foreground: #0F1B33;
+  --accent: #F2D28B;
+  --accent-foreground: #0F1B33;
+  --muted: #E5E7EB;
+  --muted-foreground: #64748B;
+  --border: #E5E7EB;
+  --card: #FFFFFF;
+  --card-foreground: #111827;
+  --popover: #FFFFFF;
+  --popover-foreground: #111827;
+  --secondary: #1D2C4D;
+  --secondary-foreground: #F8F6F2;
+  --destructive: #DC2626;
+  --input: #E5E7EB;
+  --ring: #D4AF37;
+  --chart-1: #D4AF37;
+  --chart-2: #0F1B33;
+  --chart-3: #1D2C4D;
+  --chart-4: #DC2626;
+  --chart-5: #64748B;
+  --radius: 0.5rem;
+
+  /* Sidebar — Navy */
+  --sidebar: #0F1B33;
+  --sidebar-foreground: #F8F6F2;
+  --sidebar-primary: #D4AF37;
+  --sidebar-primary-foreground: #0F1B33;
+  --sidebar-accent: #1D2C4D;
+  --sidebar-accent-foreground: #F8F6F2;
+  --sidebar-border: #1D2C4D;
+  --sidebar-ring: #D4AF37;
 }
 
 @theme inline {
@@ -88,38 +98,41 @@ body {
   color: var(--foreground);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dark Theme — Navy-based
+   ═══════════════════════════════════════════════════════════════════════════ */
 .dark {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --primary: #3b82f6;
-  --primary-foreground: #0f172a;
-  --accent: #1e293b;
-  --accent-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #cbd5e1;
-  --border: #1e293b;
-  --card: #1e293b;
-  --card-foreground: #f8fafc;
-  --popover: #1e293b;
-  --popover-foreground: #f8fafc;
-  --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
-  --destructive: #dc2626;
-  --input: #1e293b;
-  --ring: #3b82f6;
-  --chart-1: #3b82f6;
-  --chart-2: #16a34a;
-  --chart-3: #f59e0b;
-  --chart-4: #dc2626;
-  --chart-5: #8b5cf6;
-  --sidebar: #0f172a;
-  --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #f8fafc;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #1e293b;
-  --sidebar-ring: #3b82f6;
+  --background: #0B1120;
+  --foreground: #F1F0EC;
+  --primary: #D4AF37;
+  --primary-foreground: #0F1B33;
+  --accent: #1D2C4D;
+  --accent-foreground: #F1F0EC;
+  --muted: #162032;
+  --muted-foreground: #94A3B8;
+  --border: #1D2C4D;
+  --card: #111B2E;
+  --card-foreground: #F1F0EC;
+  --popover: #111B2E;
+  --popover-foreground: #F1F0EC;
+  --secondary: #1D2C4D;
+  --secondary-foreground: #F1F0EC;
+  --destructive: #EF4444;
+  --input: #1D2C4D;
+  --ring: #D4AF37;
+  --chart-1: #D4AF37;
+  --chart-2: #3B82F6;
+  --chart-3: #F2D28B;
+  --chart-4: #EF4444;
+  --chart-5: #94A3B8;
+  --sidebar: #0B1120;
+  --sidebar-foreground: #F1F0EC;
+  --sidebar-primary: #D4AF37;
+  --sidebar-primary-foreground: #0F1B33;
+  --sidebar-accent: #162032;
+  --sidebar-accent-foreground: #F1F0EC;
+  --sidebar-border: #1D2C4D;
+  --sidebar-ring: #D4AF37;
 }
 
 @layer base {
@@ -137,7 +150,7 @@ body {
 /* ── Workspace: Custom Scrollbar ─────────────────────────────────────────── */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #3f3f46 transparent;
+  scrollbar-color: #1D2C4D transparent;
 }
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;
@@ -146,9 +159,23 @@ body {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: #1D2C4D;
   border-radius: 999px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: #D4AF37;
+}
+
+/* ── Login: Gradient Orbs ──────────────────────────────────────────────── */
+.gradient-orb-1 {
+  background: #D4AF37;
+  opacity: 0.08;
+}
+.gradient-orb-2 {
+  background: #0F1B33;
+  opacity: 0.12;
+}
+.gradient-orb-3 {
+  background: #F2D28B;
+  opacity: 0.06;
 }

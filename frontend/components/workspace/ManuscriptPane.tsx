@@ -10,19 +10,19 @@ interface ManuscriptPaneProps {
 
 export function ManuscriptPane({ content, onChange, isSaving = false, title = "Untitled Manuscript" }: ManuscriptPaneProps) {
   return (
-    <div className="flex-1 h-full bg-zinc-950 flex flex-col relative">
+    <div className="flex-1 h-full bg-background flex flex-col relative">
       {/* Top Header */}
-      <div className="h-14 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-10">
-        <h1 className="text-lg font-semibold text-zinc-100 tracking-tight">{title}</h1>
-        <div className="flex items-center text-xs font-medium text-zinc-500">
+      <div className="h-14 border-b border-border flex items-center justify-between px-6 bg-card/80 backdrop-blur-md sticky top-0 z-10">
+        <h1 className="text-lg font-semibold text-foreground tracking-tight">{title}</h1>
+        <div className="flex items-center text-xs font-medium">
           {isSaving ? (
-            <span className="flex items-center text-blue-400">
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            <span className="flex items-center gap-1.5 text-[#D4AF37] bg-[#D4AF37]/10 px-2.5 py-1 rounded-full">
+              <RefreshCw className="w-3 h-3 animate-spin" />
               Saving...
             </span>
           ) : (
-            <span className="flex items-center">
-              <Save className="w-3.5 h-3.5 mr-1.5 opacity-50" />
+            <span className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+              <Save className="w-3 h-3" />
               Saved
             </span>
           )}
@@ -35,7 +35,7 @@ export function ManuscriptPane({ content, onChange, isSaving = false, title = "U
           <textarea
             value={content}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full h-full min-h-[800px] bg-transparent text-zinc-200 text-base md:text-lg leading-relaxed focus:outline-none resize-none placeholder-zinc-700"
+            className="w-full h-full min-h-[800px] bg-transparent text-foreground text-base md:text-lg leading-relaxed focus:outline-none resize-none placeholder-muted-foreground/40"
             placeholder="Start writing your manuscript here..."
             spellCheck="false"
           />
