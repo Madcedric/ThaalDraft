@@ -423,18 +423,7 @@ async def reconstruct_document(
 
     async def notify(step: str, status: str, message: str = ""):
         try:
-    # Save all results to document
-    try:
-        updates = {"parsed_json": {**parsed_data, "reconstruction_results": results}}
-        if results["steps"].get("compliance", {}).get("status") == "completed":
-            updates["compliance_report"] = results["steps"]["compliance"]
-        if results["steps"].get("review", {}).get("status") == "completed":
-            updates["review_report"] = results["steps"]["review"]
-        document_service.update_document(document_id, updates)
-    except Exception as save_err:
-        logger.warning(f"Failed to save reconstruction results: {save_err}")
-
-    await manager.broadcast_to_document(document_id, {
+            await manager.broadcast_to_document(document_id, {
                 "event": "reconstruction_progress",
                 "step": step,
                 "status": status,
@@ -531,6 +520,17 @@ async def reconstruct_document(
     except Exception as e:
         results["steps"]["review"] = {"status": "failed", "error": str(e)}
         await notify("review", "failed", str(e))
+
+    # Save all results to document
+    try:
+        updates = {"parsed_json": {**parsed_data, "reconstruction_results": results}}
+        if results["steps"].get("compliance", {}).get("status") == "completed":
+            updates["compliance_report"] = results["steps"]["compliance"]
+        if results["steps"].get("review", {}).get("status") == "completed":
+            updates["review_report"] = results["steps"]["review"]
+        document_service.update_document(document_id, updates)
+    except Exception as save_err:
+        logger.warning(f"Failed to save reconstruction results: {save_err}")
 
     await manager.broadcast_to_document(document_id, {
         "event": "job_completed",
