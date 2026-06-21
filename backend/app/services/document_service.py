@@ -66,6 +66,8 @@ def create_document_record(doc: Dict) -> Dict:
     # Extract parsed_json from payload for normalized insertion
     parsed_json = doc.pop("parsed_json", {})
     doc.setdefault("mode", "reconstruction")
+    # Include parsed_json in the insert so get_document can return it
+    doc["parsed_json"] = parsed_json
     
     doc_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/documents"
     try:
@@ -99,8 +101,10 @@ def create_document_record(doc: Dict) -> Dict:
                             s_payload.append({
                                 "manuscript_id": manuscript_id,
                                 "heading": sec.get("heading", ""),
+                                "label": sec.get("heading", f"Section {idx+1}"),
                                 "content": sec.get("content", ""),
-                                "order_index": idx
+                                "section_order": idx,
+                                "level": sec.get("level", 1)
                             })
                     if s_payload:
                         s_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/sections"
