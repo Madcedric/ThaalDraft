@@ -56,6 +56,7 @@ export default function WorkspacePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
+  const [isReconstructing, setIsReconstructing] = useState(false);
 
   // WebSocket connection for real-time updates
   const { latestUpdate, connectionStatus } = useDocumentSync(documentId);
@@ -127,6 +128,30 @@ export default function WorkspacePage() {
     setSections(prev => prev.map(s => s.id === activeSection ? { ...s, content } : s));
     const target = sections.find(s => s.id === id);
     if (target) { setActiveSection(id); setContent(target.content); }
+  };
+
+  // ── Reconstruction Pipeline ────────────────────────────────────────────────
+
+  const handleReconstruct = async () => {
+    const token = getToken();
+    if (!token || !documentId) return;
+    setIsReconstructing(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/reconstruct`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      if (!response.ok) throw new Error('Reconstruction failed');
+      // Reload document after reconstruction
+      await loadDocument();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Reconstruction failed');
+    } finally {
+      setIsReconstructing(false);
+    }
   };
 
   // ── Auto-save on content change ────────────────────────────────────────────
@@ -270,6 +295,9 @@ export default function WorkspacePage() {
           issuesCount={issuesCount}
           mode={mode}
           onModeChange={setMode}
+          documentId={documentId}
+          onReconstruct={handleReconstruct}
+          isReconstructing={isReconstructing}
         />
       </div>
     </div>

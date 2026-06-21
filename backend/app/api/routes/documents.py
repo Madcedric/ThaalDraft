@@ -384,6 +384,136 @@ async def get_document_jobs(document_id: str, current_user: dict = Depends(get_c
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/{document_id}/reconstruct")
+async def reconstruct_document(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Run the full reconstruction pipeline: parse → structure → citations → compliance → review."""
+    from app.services.citation.analyzer import analyze_citations
+    from app.services.compliance.analyzer import analyze_compliance
+    from app.services.reviewer.engine_v2 import review_manuscript
+    from app.services.manuscript.model import manuscript_from_dict
+    from app.api.routes.websockets import manager
+
+    doc = document_service.get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.get("user_id") != current_user.get("id"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    results = {"steps": {}}
+
+    async def notify(step: str, status: str, message: str = ""):
+        try:
+            await manager.broadcast_to_document(document_id, {
+                "event": "reconstruction_progress",
+                "step": step,
+                "status": status,
+                "message": message,
+            })
+        except Exception:
+            pass
+
+    parsed_data = doc.get("parsed_json") or {}
+
+    # Step 1: Parse
+    if not parsed_data or not parsed_data.get("sections"):
+        await notify("parse", "running")
+        try:
+            from app.services.document_parser import parse_document
+            from app.services import storage_service
+            storage_path = doc.get("storage_path", "")
+            file_ext = os.path.splitext(doc.get("filename", ""))[1].lower()
+            local_path = f"tmp/{document_id}{file_ext}"
+            os.makedirs("tmp", exist_ok=True)
+            storage_service.download_file_from_supabase(storage_path, local_path)
+            parsed_data = parse_document(local_path)
+            document_service.update_document(document_id, {"parsed_json": parsed_data})
+            results["steps"]["parse"] = {"status": "completed", "sections": len(parsed_data.get("sections", []))}
+            await notify("parse", "completed", f"Parsed {len(parsed_data.get('sections', []))} sections")
+            if os.path.exists(local_path):
+                os.remove(local_path)
+        except Exception as e:
+            results["steps"]["parse"] = {"status": "failed", "error": str(e)}
+            await notify("parse", "failed", str(e))
+    else:
+        results["steps"]["parse"] = {"status": "skipped", "message": "Already parsed"}
+
+    # Step 2: Structure
+    await notify("structure", "running")
+    try:
+        manuscript_dict = parsed_data.get("manuscript_model") or parsed_data
+        manuscript = manuscript_from_dict(manuscript_dict)
+        if not manuscript.sections:
+            structured = build_manuscript(parsed_data)
+            manuscript = manuscript_from_dict(structured)
+            document_service.update_document(document_id, {
+                "parsed_json": {**parsed_data, "manuscript_model": structured}
+            })
+        results["steps"]["structure"] = {
+            "status": "completed",
+            "title": manuscript.title,
+            "sections": len(manuscript.sections),
+            "references": len(manuscript.references),
+        }
+        await notify("structure", "completed", f"Structure: {len(manuscript.sections)} sections")
+    except Exception as e:
+        results["steps"]["structure"] = {"status": "failed", "error": str(e)}
+        await notify("structure", "failed", str(e))
+
+    # Step 3: Citations
+    await notify("citations", "running")
+    try:
+        citation_result = analyze_citations(manuscript)
+        results["steps"]["citations"] = {
+            "status": "completed",
+            "total": citation_result.get("total_citations", 0),
+            "resolved": citation_result.get("resolved_citations", 0),
+        }
+        await notify("citations", "completed", f"Citations: {citation_result.get('total_citations', 0)} found")
+    except Exception as e:
+        results["steps"]["citations"] = {"status": "failed", "error": str(e)}
+        await notify("citations", "failed", str(e))
+
+    # Step 4: Compliance
+    target_journal = doc.get("selected_journal") or "ieee"
+    await notify("compliance", "running")
+    try:
+        compliance_result = analyze_compliance(manuscript, target_journal)
+        results["steps"]["compliance"] = {
+            "status": "completed",
+            "score": compliance_result.get("score", {}).get("overall", 0),
+            "issues": len(compliance_result.get("issues", [])),
+        }
+        await notify("compliance", "completed", f"Compliance: {compliance_result.get('score', {}).get('overall', 0)}%")
+    except Exception as e:
+        results["steps"]["compliance"] = {"status": "failed", "error": str(e)}
+        await notify("compliance", "failed", str(e))
+
+    # Step 5: Review
+    await notify("review", "running")
+    try:
+        review_result = review_manuscript(manuscript, target_journal)
+        results["steps"]["review"] = {
+            "status": "completed",
+            "readiness": review_result.get("publication_readiness", {}).get("overall", 0),
+            "label": review_result.get("publication_readiness", {}).get("label", "Unknown"),
+        }
+        await notify("review", "completed", f"Review: {review_result.get('publication_readiness', {}).get('label', 'Unknown')}")
+    except Exception as e:
+        results["steps"]["review"] = {"status": "failed", "error": str(e)}
+        await notify("review", "failed", str(e))
+
+    await manager.broadcast_to_document(document_id, {
+        "event": "job_completed",
+        "job_type": "reconstruction",
+        "results": results,
+    })
+
+    return {"document_id": document_id, "status": "completed", "results": results}
+
+
 @router.post("/format")
 async def format_document(file: UploadFile = File(...), template: str = Form(...), current_user: dict = Depends(get_current_user)):
     """Format a document to a specific template. Currently supports IEEE."""
