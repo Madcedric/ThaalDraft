@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Activity, BookOpen, AlertCircle, CheckCircle2, Download, FileText, Loader2, Send, Package } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface AnalysisPaneProps {
   healthScore: number;
@@ -38,6 +39,7 @@ export function AnalysisPane({
   onReconstruct,
   isReconstructing = false,
 }: AnalysisPaneProps) {
+  const { user } = useAuth();
   const [selectedTemplate, setSelectedTemplate] = useState('ieee');
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -45,12 +47,11 @@ export function AnalysisPane({
   const [submissionBuilt, setSubmissionBuilt] = useState(false);
 
   const handleExport = async (format: string) => {
-    if (!documentId) return;
+    if (!documentId || !user) return;
     setIsExporting(true);
     setExportMessage(null);
     try {
-      const token = localStorage.getItem('firebase_id_token') || sessionStorage.getItem('firebase_id_token');
-      if (!token) { setExportMessage('Not authenticated'); return; }
+      const token = await user.getIdToken();
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/export`,
@@ -90,12 +91,11 @@ export function AnalysisPane({
   };
 
   const handleBuildSubmission = async () => {
-    if (!documentId) return;
+    if (!documentId || !user) return;
     setIsBuildingSubmission(true);
     setExportMessage(null);
     try {
-      const token = localStorage.getItem('firebase_id_token') || sessionStorage.getItem('firebase_id_token');
-      if (!token) { setExportMessage('Not authenticated'); return; }
+      const token = await user.getIdToken();
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/submission/build`,

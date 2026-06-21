@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getDocument, updateDocument, getCitationHealth, analyzeReview, getReviewReport } from '@/services/api';
 import { useDocumentSync } from '@/hooks/useDocumentSync';
+import { useAuth } from '@/lib/auth-context';
 import { StructurePane } from '@/components/workspace/StructurePane';
 import { ManuscriptPane } from '@/components/workspace/ManuscriptPane';
 import { AnalysisPane } from '@/components/workspace/AnalysisPane';
@@ -25,23 +26,12 @@ interface Section {
 
 type WorkspaceMode = 'reconstruction' | 'formatting';
 
-// ── Auth helper ───────────────────────────────────────────────────────────────
-
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem('firebase_id_token') || sessionStorage.getItem('firebase_id_token');
-    return raw;
-  } catch {
-    return null;
-  }
-}
-
 // ── Workspace Page ─────────────────────────────────────────────────────────────
 
 export default function WorkspacePage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const documentId = params?.id as string;
 
   const [doc, setDoc] = useState<Document | null>(null);
@@ -65,10 +55,10 @@ export default function WorkspacePage() {
   // ── Load Document ──────────────────────────────────────────────────────────
 
   const loadDocument = useCallback(async () => {
-    const token = getToken();
-    if (!token || !documentId) { setError('Not authenticated'); setIsLoading(false); return; }
+    if (!user || !documentId) { setError('Not authenticated'); setIsLoading(false); return; }
 
     try {
+      const token = await user.getIdToken();
       const data = await getDocument(documentId, token);
       setDoc(data);
 
@@ -92,7 +82,8 @@ export default function WorkspacePage() {
 
       // Load citation health
       try {
-        const health = await getCitationHealth(documentId, token);
+        const token2 = await user.getIdToken();
+        const health = await getCitationHealth(documentId, token2);
         setHealthScore(Math.round(health.health_score?.overall ?? 0));
         setCitationsCount(health.total_references ?? 0);
       } catch {
@@ -104,7 +95,7 @@ export default function WorkspacePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [documentId]);
+  }, [documentId, user]);
 
   useEffect(() => { loadDocument(); }, [loadDocument]);
 
@@ -133,10 +124,10 @@ export default function WorkspacePage() {
   // ── Reconstruction Pipeline ────────────────────────────────────────────────
 
   const handleReconstruct = async () => {
-    const token = getToken();
-    if (!token || !documentId) return;
+    if (!user || !documentId) return;
     setIsReconstructing(true);
     try {
+      const token = await user.getIdToken();
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/reconstruct`,
         {
@@ -164,9 +155,9 @@ export default function WorkspacePage() {
     setIsSaving(true);
 
     saveTimer.current = setTimeout(async () => {
-      const token = getToken();
-      if (!token || !documentId) { setIsSaving(false); return; }
+      if (!user || !documentId) { setIsSaving(false); return; }
       try {
+        const token = await user.getIdToken();
         // Persist the updated content to the backend
         const updatedSections = sections.map(s => s.id === activeSection ? { ...s, content: newContent } : s);
         const currentParsedJson = (doc?.parsed_json ?? {}) as Record<string, unknown>;
