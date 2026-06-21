@@ -110,6 +110,17 @@ TEMPLATE_CONFIGS = {
         margins={"top": 1.0, "bottom": 1.0, "left": 1.0, "right": 1.0},
         two_column=False,
     ),
+    "elsevier": FormatConfig(
+        name="Elsevier",
+        body_size=10,
+        title_size=14,
+        heading_sizes=[12, 11],
+        margins={"top": 1.0, "bottom": 1.0, "left": 1.0, "right": 1.0},
+        two_column=False,
+        requires_keywords=True,
+        keywords_label="Keywords",
+        line_spacing=1.5,
+    ),
 }
 
 
