@@ -3,14 +3,10 @@ import json
 import time
 import logging
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.services.ollama_service import (
-    is_available as ollama_available,
-    chat as ollama_chat,
-    extract_json as ollama_extract_json,
-    OLLAMA_MODEL,
-)
+from app.services.ai_providers import registry
 
 from .schema import (
     ReviewAnalysisResponse,
@@ -105,11 +101,12 @@ def _llm_review(
 
 Respond with the required JSON format. Be specific about issues found in the text."""
 
-    response_text = ollama_chat(prompt, system=REVIEW_SYSTEM_PROMPT)
-    if not response_text:
-        return None
-
-    return ollama_extract_json(response_text)
+    response = registry.chat_json_with_fallback(prompt, system=REVIEW_SYSTEM_PROMPT)
+    if response.success and response.parsed_json:
+        return response.parsed_json
+    
+    logger.warning(f"AI review failed: {response.error}")
+    return {}
 
 
 def _get_section_content(sections: List[Dict], label: str) -> str:
@@ -457,12 +454,12 @@ def _llm_based_review(
             major_count=sum(1 for w in weaknesses if w.severity == ReviewSeverity.MAJOR),
             minor_count=sum(1 for w in weaknesses if w.severity == ReviewSeverity.MINOR),
             suggestion_count=len(suggestions),
-            analysis_method=f"llm ({OLLAMA_MODEL})",
-            processing_metadata={
+            analysis_method=f"llm",
+            analysis_metadata={
+                "timestamp": datetime.utcnow().isoformat() + "Z",
                 "processing_time_ms": round(processing_time_ms, 2),
                 "sections_analyzed": len(structured_data.get("sections", [])),
                 "references_count": len(structured_data.get("references", [])),
-                "model": OLLAMA_MODEL,
             },
         )
     except Exception as e:
@@ -476,8 +473,9 @@ def analyze_review(
     citation_report: Optional[Dict[str, Any]] = None,
     journal_id: Optional[str] = None,
 ) -> ReviewReport:
-    if ollama_available():
-        logger.info("Using Ollama LLM for review analysis")
+    ai_fallback = registry.get_fallback_provider()
+    if ai_fallback:
+        logger.info(f"Using {ai_fallback.name} LLM for review analysis")
         llm_report = _llm_based_review(document_id, structured_data, citation_report, journal_id)
         if llm_report:
             return llm_report

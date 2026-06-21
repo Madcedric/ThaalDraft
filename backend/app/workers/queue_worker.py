@@ -12,6 +12,7 @@ from app.services import job_service, document_service, struct_service
 from app.services.document_parser import parse_document
 from app.services.manuscript.engine import build_manuscript
 from app.api.routes.websockets import manager
+from app.services.citation.analyzer import analyze_citations
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,9 +40,16 @@ def process_parse_job(job: Dict):
         # Fetch existing document to inject parsed_json (which updates the normalized tables)
         doc = document_service.get_document(document_id)
         if doc:
+            # Run citation analysis asynchronously as part of the parse job
+            citation_report = analyze_citations(
+                structured_json=structured_data,
+                document_id=document_id,
+                resolve_dois=True  # Enabled for async worker
+            )
+            structured_data["citation_report"] = citation_report.model_dump()
+
             doc["parsed_json"] = structured_data
             # Re-create the document record to update the normalized tables with the new data
-            # Note: A proper phase 3 update would just update the normalized tables.
             document_service.create_document_record(doc)
             
             # Update document status
