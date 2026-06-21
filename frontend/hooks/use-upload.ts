@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { uploadDocument, UploadDocumentResponse } from "@/services/api";
 
 interface UseUploadReturn {
-  upload: (file: File) => Promise<UploadDocumentResponse>;
+  upload: (file: File, mode?: string) => Promise<UploadDocumentResponse>;
   isUploading: boolean;
   error: string | null;
   reset: () => void;
@@ -17,7 +17,7 @@ export function useUpload(): UseUploadReturn {
   const [error, setError] = useState<string | null>(null);
 
   const upload = useCallback(
-    async (file: File): Promise<UploadDocumentResponse> => {
+    async (file: File, mode: string = "reconstruction"): Promise<UploadDocumentResponse> => {
       if (!user) {
         throw new Error("User not authenticated");
       }
@@ -27,7 +27,7 @@ export function useUpload(): UseUploadReturn {
 
       try {
         const token = await user.getIdToken();
-        const result = await uploadDocument(file, token);
+        const result = await uploadDocument(file, token, mode);
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Upload failed";

@@ -1,13 +1,14 @@
-"""Structured Manuscript Model.
+"""Structured Manuscript Model — V2 Canonical.
 
 Canonical data model for representing a parsed manuscript.
-All downstream engines (formatting, review, export) operate on this model.
+All downstream engines (formatting, review, export, compliance, DOI) operate on this model.
 
-Uses forgiving defaults so old data (missing id, index, etc.) still loads.
+This is the SINGLE SOURCE OF TRUTH for the system.
 """
+
 import uuid
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Dict, Any, Self
+from typing import List, Optional, Dict, Any
 from enum import Enum
 
 
@@ -34,7 +35,11 @@ def _new_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
+# ─── Core Sub-Models ──────────────────────────────────────────────────────────
+
+
 class Author(BaseModel):
+    """A manuscript author with optional affiliation metadata."""
     name: str
     affiliation: Optional[str] = None
     email: Optional[str] = None
@@ -42,6 +47,7 @@ class Author(BaseModel):
 
 
 class Reference(BaseModel):
+    """A bibliographic reference."""
     index: int = 0
     raw_text: str = ""
     authors: List[str] = Field(default_factory=list)
@@ -55,6 +61,7 @@ class Reference(BaseModel):
 
 
 class Table(BaseModel):
+    """A table extracted from the manuscript."""
     id: str = Field(default_factory=_new_id)
     caption: Optional[str] = None
     headers: List[str] = Field(default_factory=list)
@@ -64,6 +71,7 @@ class Table(BaseModel):
 
 
 class Figure(BaseModel):
+    """A figure extracted from the manuscript."""
     id: str = Field(default_factory=_new_id)
     caption: Optional[str] = None
     image_path: Optional[str] = None
@@ -79,6 +87,7 @@ class Figure(BaseModel):
 
 
 class ManuscriptSection(BaseModel):
+    """A section of the manuscript."""
     id: str = Field(default_factory=_new_id)
     heading: str = ""
     label: SectionType = SectionType.OTHER
@@ -90,19 +99,101 @@ class ManuscriptSection(BaseModel):
     subsections: List["ManuscriptSection"] = Field(default_factory=list)
 
 
+# ─── V2 New Sub-Models ────────────────────────────────────────────────────────
+
+
+class CitationMap(BaseModel):
+    """Mapping of in-text citations to their references."""
+    in_text_markers: List[str] = Field(default_factory=list)
+    total_citations: int = 0
+    resolved_citations: int = 0
+    unresolved_citations: int = 0
+    citation_style: Optional[str] = None
+
+
+class DOIRecord(BaseModel):
+    """DOI resolution record for a reference."""
+    reference_index: int = 0
+    doi: str = ""
+    source: str = "crossref"
+    resolved: bool = False
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ComplianceReport(BaseModel):
+    """Journal compliance report."""
+    journal_id: Optional[str] = None
+    journal_name: Optional[str] = None
+    score: float = 0.0
+    checks_performed: int = 0
+    checks_passed: int = 0
+    checks_failed: int = 0
+    checks_warned: int = 0
+    issues: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ReviewReport(BaseModel):
+    """AI review report."""
+    analysis_method: str = "deterministic"
+    readiness_score: float = 0.0
+    readiness_label: str = "Not Reviewed"
+    strengths: List[Dict[str, Any]] = Field(default_factory=list)
+    weaknesses: List[Dict[str, Any]] = Field(default_factory=list)
+    category_scores: Dict[str, float] = Field(default_factory=dict)
+    improvement_suggestions: List[str] = Field(default_factory=list)
+
+
+class FormattingReport(BaseModel):
+    """Formatting status report."""
+    template_id: Optional[str] = None
+    status: str = "not_formatted"
+    validation_score: float = 0.0
+    output_path: Optional[str] = None
+
+
+class ExportReport(BaseModel):
+    """Export status report."""
+    format: str = "docx"
+    status: str = "not_exported"
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+
+
+# ─── Canonical Manuscript ─────────────────────────────────────────────────────
+
+
 class StructuredManuscript(BaseModel):
+    """Canonical Manuscript JSON — the single source of truth.
+
+    Every module in the system reads from and writes to this model.
+    Missing fields use forgiving defaults so old data still loads.
+    """
+    # Core content
     title: str = ""
     authors: List[Author] = Field(default_factory=list)
+    affiliations: List[str] = Field(default_factory=list)
     abstract: str = ""
     keywords: List[str] = Field(default_factory=list)
     sections: List[ManuscriptSection] = Field(default_factory=list)
     references: List[Reference] = Field(default_factory=list)
     tables: List[Table] = Field(default_factory=list)
     figures: List[Figure] = Field(default_factory=list)
+
+    # Counts
     word_count: int = 0
     section_count: int = 0
     reference_count: int = 0
     language: str = "en"
+
+    # V2: Intelligence layers
+    citation_map: CitationMap = Field(default_factory=CitationMap)
+    doi_records: List[DOIRecord] = Field(default_factory=list)
+    compliance_report: Optional[ComplianceReport] = None
+    review_report: Optional[ReviewReport] = None
+    formatting_report: Optional[FormattingReport] = None
+    export_report: Optional[ExportReport] = None
+
+    # Metadata
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
     def to_formatting_input(self) -> Dict[str, Any]:
@@ -143,6 +234,17 @@ class StructuredManuscript(BaseModel):
             "metadata": self.metadata,
         }
 
+    def compute_counts(self):
+        """Recompute derived counts from content."""
+        self.section_count = len(self.sections)
+        self.reference_count = len(self.references)
+        self.word_count = len(self.abstract.split()) if self.abstract else 0
+        for sec in self.sections:
+            self.word_count += len(sec.content.split())
+
+
+# ─── Forgiving Deserializer ──────────────────────────────────────────────────
+
 
 def manuscript_from_dict(data: Dict[str, Any]) -> StructuredManuscript:
     """Build a StructuredManuscript from any dict, forgiving missing/malformed fields.
@@ -152,6 +254,7 @@ def manuscript_from_dict(data: Dict[str, Any]) -> StructuredManuscript:
     - Missing id/index fields
     - Figure strings instead of dicts
     - Missing authors list
+    - V2: citation_map, doi_records, reports
     """
     if "title" in data:
         return _safe_parse(data)
@@ -210,9 +313,31 @@ def _safe_parse(data: Dict[str, Any]) -> StructuredManuscript:
         elif isinstance(a, str):
             authors.append(Author(name=a))
 
-    return StructuredManuscript(
+    # V2: Parse citation_map
+    citation_map_raw = data.get("citation_map")
+    citation_map = CitationMap(**citation_map_raw) if isinstance(citation_map_raw, dict) else CitationMap()
+
+    # V2: Parse doi_records
+    doi_records_raw = data.get("doi_records") or []
+    doi_records = [DOIRecord(**d) if isinstance(d, dict) else DOIRecord() for d in doi_records_raw]
+
+    # V2: Parse reports
+    compliance_raw = data.get("compliance_report")
+    compliance_report = ComplianceReport(**compliance_raw) if isinstance(compliance_raw, dict) else None
+
+    review_raw = data.get("review_report")
+    review_report = ReviewReport(**review_raw) if isinstance(review_raw, dict) else None
+
+    formatting_raw = data.get("formatting_report")
+    formatting_report = FormattingReport(**formatting_raw) if isinstance(formatting_raw, dict) else None
+
+    export_raw = data.get("export_report")
+    export_report = ExportReport(**export_raw) if isinstance(export_raw, dict) else None
+
+    ms = StructuredManuscript(
         title=data.get("title") or "",
         authors=authors,
+        affiliations=data.get("affiliations") or [],
         abstract=data.get("abstract") or "",
         keywords=data.get("keywords") or [],
         sections=sections,
@@ -223,5 +348,13 @@ def _safe_parse(data: Dict[str, Any]) -> StructuredManuscript:
         section_count=len(sections),
         reference_count=len(references),
         language=data.get("language", "en"),
+        citation_map=citation_map,
+        doi_records=doi_records,
+        compliance_report=compliance_report,
+        review_report=review_report,
+        formatting_report=formatting_report,
+        export_report=export_report,
         metadata=data.get("metadata") or {},
     )
+    ms.compute_counts()
+    return ms

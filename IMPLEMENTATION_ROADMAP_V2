@@ -1,0 +1,337 @@
+# ThaalDraft V2 — Implementation Roadmap
+
+## Phase 0 — Reset and Audit
+
+Goal:
+
+- freeze current chaos
+- align architecture
+- identify broken flows
+- remove duplicated logic
+
+Deliverables:
+
+- ARCHITECTURE_V2.md
+- PRD_V2.md
+- UI_UX_V2.md
+- DATABASE_SCHEMA_V2.sql
+- implementation checklist
+
+Acceptance:
+
+- team agrees on one source of truth
+- Canonical Manuscript JSON is defined
+
+---
+
+## Phase 1 — Document Intelligence Layer
+
+Goal:
+
+- support messy input
+- extract text, images, tables, metadata, and styles
+
+DOCX:
+
+- unzip `.docx`
+- parse XML
+- parse styles
+- extract media files
+
+PDF:
+
+- PyMuPDF
+- OCR fallback
+- layout-aware extraction
+
+Deliverables:
+
+- docx extractor
+- pdf extractor
+- markdown extractor
+- latex extractor
+- extraction report
+
+Acceptance:
+
+- uploaded file can be decomposed into structured fragments
+
+---
+
+## Phase 2 — Canonical Manuscript JSON
+
+Goal:
+
+- build one consistent manuscript model
+
+Must include:
+
+- title
+- authors
+- affiliations
+- abstract
+- keywords
+- sections
+- figures
+- tables
+- references
+- citations
+- DOI metadata
+
+Deliverables:
+
+- manuscript schema
+- serializer
+- validator
+- persistence layer
+
+Acceptance:
+
+- all downstream modules read the same model
+
+---
+
+## Phase 3 — Structure Intelligence
+
+Goal:
+
+- reconstruct manuscript structure from messy drafts
+
+Use:
+
+- spaCy
+- Sentence Transformers
+- Gemini first
+- DeepSeek second
+
+Tasks:
+
+- section detection
+- author detection
+- affiliation detection
+- abstract detection
+- reference detection
+- figure/table association
+
+Deliverables:
+
+- structure engine
+- reconstruction report
+- confidence scoring
+
+Acceptance:
+
+- manuscript can be reconstructed even if headings are inconsistent or partially missing
+
+---
+
+## Phase 4 — DOI and Citation Intelligence
+
+Goal:
+
+- validate and enrich references
+
+Integrations:
+
+- CrossRef
+- OpenAlex
+- Semantic Scholar
+
+Tasks:
+
+- DOI extraction
+- DOI lookup
+- citation style detection
+- reference validation
+- missing citation detection
+- duplicate citation detection
+
+Deliverables:
+
+- citation report
+- DOI report
+- enrichment workflow
+
+Acceptance:
+
+- references are validated against real APIs
+
+---
+
+## Phase 5 — Reviewer AI
+
+Goal:
+
+- generate actionable review feedback
+
+AI Priority:
+
+- Gemini
+- DeepSeek fallback
+
+Tasks:
+
+- writing quality
+- novelty
+- structure quality
+- publication readiness
+- missing section warnings
+
+Deliverables:
+
+- review report
+- readiness score
+- actionable suggestions
+
+Acceptance:
+
+- review output is useful and readable
+
+---
+
+## Phase 6 — Formatting Studio
+
+Goal:
+
+- convert manuscripts into publication-ready formats
+
+Support:
+
+- IEEE
+- Elsevier
+- Springer
+- ACM
+- APA
+- MLA
+- Nature
+- Custom journal formatting
+
+Tasks:
+
+- template-driven formatting
+- style conversion
+- citation formatting
+- heading formatting
+- table/figure formatting
+
+Deliverables:
+
+- format engine
+- template system
+- formatting validation
+
+Acceptance:
+
+- one manuscript can be exported into multiple publication styles
+
+---
+
+## Phase 7 — Export Engine
+
+Goal:
+
+- produce downloadable outputs
+
+Outputs:
+
+- DOCX
+- PDF
+- LaTeX
+- ZIP package
+
+Deliverables:
+
+- download endpoints
+- export history
+- file naming rules
+
+Acceptance:
+
+- every completed format has a download path
+
+---
+
+## Phase 8 — Workspace and UI Modernization
+
+Goal:
+
+- replace current UI with V2 workspace
+
+Requirements:
+
+- hybrid workspace
+- progress states
+- live status updates
+- dynamic module cards
+- error recovery
+- no dead buttons
+
+Deliverables:
+
+- new dashboard
+- new document view
+- new formatting studio
+- new reports view
+
+Acceptance:
+
+- UI changes with backend progress
+
+---
+
+## Phase 9 — Batch Processing and Submission Package
+
+Goal:
+
+- support multi-file workflows
+
+Tasks:
+
+- batch upload
+- batch queue
+- batch status
+- submission ZIP
+- cover letter
+- author statement
+
+Deliverables:
+
+- batch manager
+- submission builder
+- package downloader
+
+Acceptance:
+
+- multi-document workflow works end to end
+
+---
+
+## Phase 10 — Testing and Deployment
+
+Goal:
+
+- verify production readiness
+
+Must test:
+
+- upload
+- extraction
+- reconstruction
+- citations
+- DOI
+- review
+- formatting
+- export
+- UI refresh
+
+Deliverables:
+
+- test report
+- validation report
+- deployment checklist
+
+Acceptance:
+
+- no silent failures
+- no broken workflows
+- no fake completion states

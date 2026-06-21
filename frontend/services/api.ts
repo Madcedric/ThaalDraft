@@ -42,10 +42,12 @@ export interface UploadDocumentResponse {
 
 export async function uploadDocument(
   file: File,
-  token: string
+  token: string,
+  mode: string = "reconstruction"
 ): Promise<UploadDocumentResponse> {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("mode", mode);
 
   const url = `${API_BASE}/api/v1/documents/upload`;
   const response = await fetch(url, {

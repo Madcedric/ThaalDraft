@@ -18,8 +18,12 @@ router = APIRouter()
 
 
 @router.post("/upload", response_model=DocumentMeta)
-async def upload_document(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload a document and parse it. Heavy analyses (citations, compliance, review) run on-demand."""
+async def upload_document(
+    file: UploadFile = File(...),
+    mode: str = Form("reconstruction"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload a document. Mode: 'reconstruction' (full pipeline) or 'formatting' (skip to format)."""
     file_path = await save_upload_file(file)
     size = os.path.getsize(file_path)
     ext = get_file_extension(file_path)
@@ -28,29 +32,43 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
     user_email = current_user.get("email", "")
 
     try:
+        document_service.ensure_user_exists(user_id, user_email)
+        
         filename = os.path.basename(file_path)
         dest_path = f"{int(time.time())}_{filename}"
         storage_path = storage_service.upload_file_to_supabase(file_path, dest_path)
 
-        parsed_data = parse_document(file_path)
-
         safe_filename = file.filename or filename or "unnamed"
 
-        document_service.ensure_user_exists(user_id, user_email)
-
-        file_ext = ext.lstrip(".")
-        structured_data = struct_service.normalize_classification(parsed_data, file_type=file_ext)
-
-        manuscript = build_manuscript(structured_data)
-        structured_data["manuscript_model"] = manuscript.model_dump()
+        # Parse the document immediately during upload
+        parsed_json = {}
+        doc_status = "uploaded"
+        word_count = 0
+        try:
+            parsed_json = parse_document(file_path)
+            doc_status = "parsed"
+            # Count words from parsed content
+            if isinstance(parsed_json, dict):
+                for section in parsed_json.get("sections", []):
+                    word_count += len(section.get("content", "").split())
+                if parsed_json.get("abstract"):
+                    word_count += len(str(parsed_json["abstract"]).split())
+            logger.info(f"PARSE: Document parsed successfully ({word_count} words)")
+        except Exception as parse_err:
+            logger.warning(f"PARSE: Initial parse failed, continuing with empty parsed_json: {parse_err}")
 
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
+            "original_filename": safe_filename,
             "storage_path": storage_path,
-            "status": "structured",
+            "file_type": ext.lstrip(".") if ext else "unknown",
+            "status": doc_status,
             "size_bytes": size,
-            "parsed_json": structured_data,
+            "file_size_bytes": size,
+            "word_count": word_count,
+            "mode": mode,
+            "parsed_json": parsed_json
         }
         created = document_service.create_document_record(doc_payload)
 
@@ -58,14 +76,14 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
-        logger.info(f"UPLOAD: Document {doc_id} uploaded and parsed ({size} bytes)")
+        logger.info(f"UPLOAD: Document {doc_id} uploaded (mode={mode}, status={doc_status}, {size} bytes)")
 
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
-            storage_path=created.get("storage_path"),
-            status="structured",
-            size_bytes=created.get("size_bytes"),
+            storage_path=storage_path,
+            status=doc_status,
+            size_bytes=size,
         )
     except HTTPException:
         raise
@@ -347,8 +365,8 @@ async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depe
         
         job_payload = {
             "document_id": document_id,
-            "type": job_type,
-            "status": "pending",
+            "job_type": job_type,
+            "status": "queued",
             "payload": payload.get("payload", {})
         }
         created = job_service.create_job(job_payload)
@@ -381,6 +399,146 @@ async def get_document_jobs(document_id: str, current_user: dict = Depends(get_c
     except Exception as e:
         print(f"JOBS ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{document_id}/reconstruct")
+async def reconstruct_document(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Run the full reconstruction pipeline: parse → structure → citations → compliance → review."""
+    from app.services.citation.analyzer import analyze_citations
+    from app.services.compliance.analyzer import analyze_compliance
+    from app.services.reviewer.engine_v2 import review_manuscript
+    from app.services.manuscript.model import manuscript_from_dict
+    from app.api.routes.websockets import manager
+
+    doc = document_service.get_document(document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.get("user_id") != current_user.get("id"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    results = {"steps": {}}
+
+    async def notify(step: str, status: str, message: str = ""):
+        try:
+            await manager.broadcast_to_document(document_id, {
+                "event": "reconstruction_progress",
+                "step": step,
+                "status": status,
+                "message": message,
+            })
+        except Exception:
+            pass
+
+    parsed_data = doc.get("parsed_json") or {}
+
+    # Step 1: Parse
+    if not parsed_data or not parsed_data.get("sections"):
+        await notify("parse", "running")
+        try:
+            from app.services.document_parser import parse_document
+            from app.services import storage_service
+            storage_path = doc.get("storage_path", "")
+            file_ext = os.path.splitext(doc.get("filename", ""))[1].lower()
+            local_path = f"tmp/{document_id}{file_ext}"
+            os.makedirs("tmp", exist_ok=True)
+            storage_service.download_file_from_supabase(storage_path, local_path)
+            parsed_data = parse_document(local_path)
+            document_service.update_document(document_id, {"parsed_json": parsed_data})
+            results["steps"]["parse"] = {"status": "completed", "sections": len(parsed_data.get("sections", []))}
+            await notify("parse", "completed", f"Parsed {len(parsed_data.get('sections', []))} sections")
+            if os.path.exists(local_path):
+                os.remove(local_path)
+        except Exception as e:
+            results["steps"]["parse"] = {"status": "failed", "error": str(e)}
+            await notify("parse", "failed", str(e))
+    else:
+        results["steps"]["parse"] = {"status": "skipped", "message": "Already parsed"}
+
+    # Step 2: Structure
+    await notify("structure", "running")
+    try:
+        manuscript_dict = parsed_data.get("manuscript_model") or parsed_data
+        manuscript = manuscript_from_dict(manuscript_dict)
+        if not manuscript.sections:
+            structured = build_manuscript(parsed_data)
+            manuscript = manuscript_from_dict(structured)
+            document_service.update_document(document_id, {
+                "parsed_json": {**parsed_data, "manuscript_model": structured}
+            })
+        results["steps"]["structure"] = {
+            "status": "completed",
+            "title": manuscript.title,
+            "sections": len(manuscript.sections),
+            "references": len(manuscript.references),
+        }
+        await notify("structure", "completed", f"Structure: {len(manuscript.sections)} sections")
+    except Exception as e:
+        results["steps"]["structure"] = {"status": "failed", "error": str(e)}
+        await notify("structure", "failed", str(e))
+
+    # Step 3: Citations
+    await notify("citations", "running")
+    try:
+        citation_result = analyze_citations(manuscript)
+        results["steps"]["citations"] = {
+            "status": "completed",
+            "total": citation_result.get("total_citations", 0),
+            "resolved": citation_result.get("resolved_citations", 0),
+        }
+        await notify("citations", "completed", f"Citations: {citation_result.get('total_citations', 0)} found")
+    except Exception as e:
+        results["steps"]["citations"] = {"status": "failed", "error": str(e)}
+        await notify("citations", "failed", str(e))
+
+    # Step 4: Compliance
+    target_journal = doc.get("selected_journal") or "ieee"
+    await notify("compliance", "running")
+    try:
+        compliance_result = analyze_compliance(document_id, target_journal, parsed_data)
+        results["steps"]["compliance"] = {
+            "status": "completed",
+            "score": compliance_result.score.overall if hasattr(compliance_result, 'score') else 0,
+        }
+        await notify("compliance", "completed", f"Compliance: {results['steps']['compliance']['score']}%")
+    except Exception as e:
+        results["steps"]["compliance"] = {"status": "failed", "error": str(e)}
+        await notify("compliance", "failed", str(e))
+
+    # Step 5: Review
+    await notify("review", "running")
+    try:
+        review_result = review_manuscript(manuscript, target_journal)
+        results["steps"]["review"] = {
+            "status": "completed",
+            "readiness": review_result.get("publication_readiness", {}).get("overall", 0),
+            "label": review_result.get("publication_readiness", {}).get("label", "Unknown"),
+        }
+        await notify("review", "completed", f"Review: {review_result.get('publication_readiness', {}).get('label', 'Unknown')}")
+    except Exception as e:
+        results["steps"]["review"] = {"status": "failed", "error": str(e)}
+        await notify("review", "failed", str(e))
+
+    # Save all results to document
+    try:
+        updates = {"parsed_json": {**parsed_data, "reconstruction_results": results}}
+        if results["steps"].get("compliance", {}).get("status") == "completed":
+            updates["compliance_report"] = results["steps"]["compliance"]
+        if results["steps"].get("review", {}).get("status") == "completed":
+            updates["review_report"] = results["steps"]["review"]
+        document_service.update_document(document_id, updates)
+    except Exception as save_err:
+        logger.warning(f"Failed to save reconstruction results: {save_err}")
+
+    await manager.broadcast_to_document(document_id, {
+        "event": "job_completed",
+        "job_type": "reconstruction",
+        "results": results,
+    })
+
+    return {"document_id": document_id, "status": "completed", "results": results}
 
 
 @router.post("/format")

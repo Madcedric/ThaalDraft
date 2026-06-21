@@ -14,6 +14,7 @@ import { JournalSelector, Journal } from "@/components/ui/journal-selector";
 import { useUpload } from "@/hooks/use-upload";
 import { formatFileSize, formatDateShort } from "@/utils/helpers";
 import { Document } from "@/types";
+import { UploadMode, UploadModeSelector } from "@/components/upload-mode-selector";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { upload, isUploading, error: uploadError, reset: resetUpload } = useUpload();
   const [file, setFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState<UploadMode | null>(null);
   const [selectedJournal, setSelectedJournal] = useState<Journal | null>(null);
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
@@ -58,7 +60,7 @@ export default function DashboardPage() {
     if (!file || !user) return;
 
     try {
-      const result = await upload(file);
+      const result = await upload(file, uploadMode || "reconstruction");
       if (selectedJournal) {
         try {
           const token = await user.getIdToken();
@@ -74,7 +76,7 @@ export default function DashboardPage() {
           console.warn("Failed to save journal selection");
         }
       }
-      router.push(`/dashboard/document/${result.id}`);
+      router.push(`/workspace/${result.id}`);
     } catch {
       // Error handled by useUpload
     }
@@ -88,75 +90,95 @@ export default function DashboardPage() {
         <p className="text-muted-foreground mt-1 font-medium">Upload your manuscript and prepare it for publication.</p>
       </div>
 
-      {/* Top Area: Upload + Journal Selection */}
+      {/* Top Area: Upload Mode + File Upload + Journal Selection */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Upload Card */}
+          {/* Upload Mode Selection */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Upload Manuscript</CardTitle>
+                <CardTitle className="text-base">Choose Workflow</CardTitle>
               </CardHeader>
               <CardContent>
-                <div
-                  className={`relative border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all duration-200
-                    ${file ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"}
-                    ${isUploading ? "opacity-50 pointer-events-none" : ""}`}
-                >
-                  <input
-                    type="file"
-                    accept=".docx,.pdf,.tex,.md"
-                    onChange={handleFileChange}
-                    disabled={isUploading}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-                    aria-label="Upload manuscript file"
-                  />
-                  <AnimatePresence mode="wait">
-                    {!file ? (
-                      <motion.div key="empty" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="flex flex-col items-center pointer-events-none">
-                        <div className="p-3 bg-muted rounded-xl mb-3">
-                          <UploadCloud className="w-7 h-7 text-primary" />
-                        </div>
-                        <p className="text-sm font-semibold text-foreground">Drag & drop your manuscript</p>
-                        <p className="text-xs text-muted-foreground mt-1">DOCX, PDF, LaTeX, or Markdown</p>
-                      </motion.div>
-                    ) : (
-                      <motion.div key="file" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center pointer-events-none">
-                        <div className="p-3 bg-primary/10 rounded-xl mb-3">
-                          <FileText className="w-7 h-7 text-primary" />
-                        </div>
-                        <p className="text-sm font-medium text-foreground truncate max-w-[250px]">{file.name}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{formatFileSize(file.size)}</p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {uploadError && (
-                  <p className="text-sm text-destructive mt-3">{uploadError}</p>
-                )}
-
-                {file && (
-                  <div className="mt-4 flex items-center justify-between">
-                    <button
-                      onClick={() => { setFile(null); resetUpload(); }}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Choose different file
-                    </button>
-                    <Button onClick={handleUpload} disabled={isUploading}>
-                      {isUploading ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <UploadCloud className="w-4 h-4 mr-2" />
-                      )}
-                      Upload & Analyze
-                    </Button>
-                  </div>
-                )}
+                <UploadModeSelector
+                  selectedMode={uploadMode}
+                  onSelect={setUploadMode}
+                  disabled={isUploading}
+                />
               </CardContent>
             </Card>
           </motion.div>
+
+          {/* Upload Card (shown after mode selection) */}
+          {uploadMode && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">
+                    {uploadMode === "reconstruction" ? "Upload Raw Manuscript" : "Upload Document for Formatting"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={`relative border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all duration-200
+                      ${file ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"}
+                      ${isUploading ? "opacity-50 pointer-events-none" : ""}`}
+                  >
+                    <input
+                      type="file"
+                      accept=".docx,.pdf,.tex,.md,.txt"
+                      onChange={handleFileChange}
+                      disabled={isUploading}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                      aria-label="Upload manuscript file"
+                    />
+                    <AnimatePresence mode="wait">
+                      {!file ? (
+                        <motion.div key="empty" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="flex flex-col items-center pointer-events-none">
+                          <div className="p-3 bg-muted rounded-xl mb-3">
+                            <UploadCloud className="w-7 h-7 text-primary" />
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">Drag & drop your manuscript</p>
+                          <p className="text-xs text-muted-foreground mt-1">DOCX, PDF, LaTeX, Markdown, or TXT</p>
+                        </motion.div>
+                      ) : (
+                        <motion.div key="file" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center pointer-events-none">
+                          <div className="p-3 bg-primary/10 rounded-xl mb-3">
+                            <FileText className="w-7 h-7 text-primary" />
+                          </div>
+                          <p className="text-sm font-medium text-foreground truncate max-w-[250px]">{file.name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{formatFileSize(file.size)}</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {uploadError && (
+                    <p className="text-sm text-destructive mt-3">{uploadError}</p>
+                  )}
+
+                  {file && (
+                    <div className="mt-4 flex items-center justify-between">
+                      <button
+                        onClick={() => { setFile(null); resetUpload(); }}
+                        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Choose different file
+                      </button>
+                      <Button onClick={handleUpload} disabled={isUploading}>
+                        {isUploading ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <UploadCloud className="w-4 h-4 mr-2" />
+                        )}
+                        {uploadMode === "reconstruction" ? "Analyze & Format" : "Format Document"}
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
 
           {/* Journal Selection */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
@@ -199,7 +221,7 @@ export default function DashboardPage() {
                     {recentDocs.map((doc) => (
                       <Link
                         key={doc.id}
-                        href={`/dashboard/document/${doc.id}`}
+                        href={`/workspace/${doc.id}`}
                         className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors group"
                       >
                         <div className="flex items-center gap-3 min-w-0">

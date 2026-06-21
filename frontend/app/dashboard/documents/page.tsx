@@ -88,7 +88,7 @@ export default function DocumentsPage() {
           {documents.map((doc) => (
             <Link
               key={doc.id}
-              href={`/dashboard/document/${doc.id}`}
+              href={`/workspace/${doc.id}`}
               className="block"
             >
               <Card className="hover:shadow-md transition-shadow cursor-pointer">

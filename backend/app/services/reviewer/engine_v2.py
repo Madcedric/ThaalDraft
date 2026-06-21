@@ -1,12 +1,14 @@
-"""AI Reviewer Engine — v2.
+"""AI Reviewer Engine — V2.
 
-Uses Ollama (qwen3:4b) for manuscript review with deterministic fallback.
+Uses Gemini → DeepSeek AI providers for manuscript review with deterministic fallback.
 """
+import json
+import re
 import time
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.services.ollama_service import is_available as ollama_available, chat as ollama_chat, extract_json
+from app.services.ai_providers.registry import chat_with_fallback
 from app.services.manuscript.model import StructuredManuscript
 
 logger = logging.getLogger(__name__)
@@ -67,12 +69,38 @@ def _manuscript_to_text(manuscript: StructuredManuscript) -> str:
     return text
 
 
-def llm_review(manuscript: StructuredManuscript, journal_id: Optional[str] = None) -> Optional[Dict]:
-    """Call Ollama for a structured review. Returns parsed JSON or None."""
-    if not ollama_available():
-        logger.warning("Ollama not available, cannot run LLM review")
+def _parse_review_json(text: str) -> Optional[Dict[str, Any]]:
+    """Extract JSON from AI response text."""
+    if not text:
         return None
 
+    # Try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting JSON block from markdown
+    patterns = [
+        r"```json\s*\n(.*?)\n\s*```",
+        r"```\s*\n(.*?)\n\s*```",
+        r"\{.*\}",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            try:
+                candidate = match.group(1) if match.lastindex else match.group(0)
+                return json.loads(candidate)
+            except (json.JSONDecodeError, IndexError):
+                continue
+
+    logger.warning("Failed to parse review JSON from AI response")
+    return None
+
+
+def llm_review(manuscript: StructuredManuscript, journal_id: Optional[str] = None) -> Optional[Dict]:
+    """Call AI providers for a structured review. Returns parsed JSON or None."""
     context = f"Target journal: {journal_id}\n" if journal_id else ""
     manuscript_text = _manuscript_to_text(manuscript)
 
@@ -82,16 +110,22 @@ def llm_review(manuscript: StructuredManuscript, journal_id: Optional[str] = Non
 
 Respond with the required JSON format. Be specific about issues found in the text."""
 
-    logger.info("Calling Ollama for manuscript review...")
+    logger.info("Calling AI providers for manuscript review...")
     start = time.time()
-    response_text = ollama_chat(prompt, system=REVIEW_SYSTEM_PROMPT)
+    response = chat_with_fallback(prompt, system=REVIEW_SYSTEM_PROMPT)
     elapsed = time.time() - start
-    logger.info(f"Ollama review completed in {elapsed:.1f}s")
 
-    if not response_text:
+    if not response.success or not response.text:
+        logger.warning(f"AI review failed: {response.error}")
         return None
 
-    return extract_json(response_text)
+    logger.info(f"AI review completed via {response.provider} in {elapsed:.1f}s")
+
+    parsed = _parse_review_json(response.text)
+    if parsed:
+        parsed["_ai_provider"] = response.provider
+        parsed["_ai_latency_ms"] = response.latency_ms
+    return parsed
 
 
 def deterministic_review(manuscript: StructuredManuscript) -> Dict:
@@ -189,14 +223,11 @@ def review_manuscript(
     manuscript: StructuredManuscript,
     journal_id: Optional[str] = None,
 ) -> Dict:
-    """Review a manuscript. Tries Ollama first, falls back to deterministic."""
-    if ollama_available():
-        logger.info("Using Ollama LLM for review")
-        llm_result = llm_review(manuscript, journal_id)
-        if llm_result:
-            llm_result["analysis_method"] = "llm (ollama)"
-            return llm_result
-        logger.warning("LLM review failed, falling back to deterministic")
+    """Review a manuscript. Tries AI providers first, falls back to deterministic."""
+    llm_result = llm_review(manuscript, journal_id)
+    if llm_result:
+        llm_result["analysis_method"] = "llm"
+        return llm_result
 
-    logger.info("Using deterministic review")
+    logger.info("AI review unavailable, using deterministic review")
     return deterministic_review(manuscript)

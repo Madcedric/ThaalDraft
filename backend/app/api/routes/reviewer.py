@@ -15,7 +15,7 @@ async def analyze_document_review(
     request: ReviewAnalysisRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Analyze document and generate reviewer feedback using Ollama LLM."""
+    """Analyze document and generate reviewer feedback using AI."""
     try:
         doc = document_service.get_document(document_id)
         if not doc:
