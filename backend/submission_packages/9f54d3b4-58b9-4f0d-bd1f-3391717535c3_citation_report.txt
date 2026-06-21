@@ -1,0 +1,15 @@
+Citation Report for IEEE
+Health Score: 20.0%
+Total Citations: 0
+Total References: 9
+
+Issues Found:
+  [WARNING] Reference [1] is never cited in the text
+  [WARNING] Reference [2] is never cited in the text
+  [WARNING] Reference [3] is never cited in the text
+  [WARNING] Reference [4] is never cited in the text
+  [WARNING] Reference [5] is never cited in the text
+  [WARNING] Reference [6] is never cited in the text
+  [WARNING] Reference [7] is never cited in the text
+  [WARNING] Reference [8] is never cited in the text
+  [WARNING] Reference [9] is never cited in the text

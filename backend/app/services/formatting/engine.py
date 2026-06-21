@@ -8,6 +8,22 @@ from .schema import (
     ExportType,
 )
 from .templates import get_template
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+
+
+
+# from docx import Document
+#     from docx.shared import Pt, Inches
+#     from docx.enum.text import WD_ALIGN_PARAGRAPH
+# from docx import Document
+#     from docx.shared import Pt, Inches
+#     from docx.enum.text import WD_ALIGN_PARAGRAPH
+# from docx import Document
+#     from docx.shared import Pt, Inches
+#     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 
 def _validate_structured_data(
@@ -72,9 +88,7 @@ def _get_authors_list(structured_data: Dict) -> List[str]:
 
 
 def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    from docx import Document
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
 
     doc = Document()
     for section in doc.sections:
@@ -144,9 +158,7 @@ def _build_ieee_docx(structured_data: Dict, template: FormatTemplate) -> Any:
 
 
 def _build_acm_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    from docx import Document
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
 
     doc = Document()
     for section in doc.sections:
@@ -216,9 +228,7 @@ def _build_acm_docx(structured_data: Dict, template: FormatTemplate) -> Any:
 
 
 def _build_apa_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    from docx import Document
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
 
     doc = Document()
     for section in doc.sections:
@@ -286,9 +296,7 @@ def _build_apa_docx(structured_data: Dict, template: FormatTemplate) -> Any:
 
 
 def _build_springer_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    from docx import Document
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
 
     doc = Document()
     for section in doc.sections:
@@ -353,9 +361,7 @@ def _build_springer_docx(structured_data: Dict, template: FormatTemplate) -> Any
 
 
 def _build_elsevier_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    from docx import Document
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
 
     doc = Document()
     for section in doc.sections:
@@ -418,9 +424,7 @@ def _build_elsevier_docx(structured_data: Dict, template: FormatTemplate) -> Any
 
 
 def _build_mla_docx(structured_data: Dict, template: FormatTemplate) -> Any:
-    from docx import Document
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
 
     doc = Document()
     for section in doc.sections:
@@ -560,5 +564,28 @@ def format_document(
             pass
 
         return temp_output
+    elif export_type == ExportType.LATEX:
+        from app.services.formatting.latex_exporter import export_latex
+
+        latex_source = export_latex(structured_data, template_id)
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{document_id}_{template_id}.tex")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(latex_source)
+
+        processing_time_ms = (time.time() - start_time) * 1000
+
+        return FormattedOutput(
+            document_id=document_id,
+            template_id=template_id,
+            export_type=export_type,
+            file_path=output_path,
+            validation=validation,
+            processing_metadata={
+                "processing_time_ms": round(processing_time_ms, 2),
+                "template_applied": template_id,
+                "sections_formatted": len(structured_data.get("sections", [])),
+            },
+        )
     else:
         raise ValueError(f"Export type '{export_type}' not supported")
