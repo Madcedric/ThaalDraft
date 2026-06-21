@@ -43,9 +43,12 @@ async def upload_document(
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
+            "original_filename": safe_filename,
             "storage_path": storage_path,
+            "file_type": ext.lstrip(".") if ext else "unknown",
             "status": "uploaded",
             "size_bytes": size,
+            "file_size_bytes": size,
             "mode": mode,
             "parsed_json": {}
         }
