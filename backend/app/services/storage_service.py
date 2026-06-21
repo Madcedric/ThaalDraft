@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 from typing import Optional
 
@@ -7,16 +8,33 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 SUPABASE_BUCKET = os.environ.get("SUPABASE_STORAGE_BUCKET", "manuscripts")
 
 
-def upload_file_to_supabase(local_path: str, dest_path: str) -> str:
+def _sanitize_storage_key(dest_path: str) -> str:
+    """Sanitize a storage key for Supabase Storage (no special chars, spaces → underscores)."""
+    name = os.path.basename(dest_path)
+    ext = os.path.splitext(name)[1].lower()
+    base = os.path.splitext(name)[0]
+    base = re.sub(r'[^\w\-]', '_', base)
+    base = re.sub(r'_+', '_', base).strip('_')
+    if not base:
+        base = "file"
+    parent = os.path.dirname(dest_path)
+    sanitized = f"{base}{ext}"
+    if parent:
+        sanitized = f"{parent}/{sanitized}"
+    return sanitized
+
+
+def upload_file_to_supabase(local_path: str, dest_path: str) -> Optional[str]:
     """Uploads a file to Supabase Storage using the service role key.
 
-    Returns the storage path (bucket/object) on success, or local path as fallback.
+    Returns the storage path (bucket/object) on success, or None on failure / not configured.
     """
     if not SUPABASE_URL or not SUPABASE_KEY:
-        print("INFO: Supabase storage not configured; using local path.")
-        return f"local/{dest_path}"
+        print("INFO: Supabase storage not configured; skipping upload.")
+        return None
 
-    url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{SUPABASE_BUCKET}/{dest_path}"
+    safe_dest = _sanitize_storage_key(dest_path)
+    url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{SUPABASE_BUCKET}/{safe_dest}"
     headers = {
         "Authorization": f"Bearer {SUPABASE_KEY}",
     }
@@ -25,13 +43,13 @@ def upload_file_to_supabase(local_path: str, dest_path: str) -> str:
         with open(local_path, "rb") as f:
             res = requests.put(url, data=f, headers=headers, timeout=30)
         if res.status_code in (200, 201, 204):
-            return f"{SUPABASE_BUCKET}/{dest_path}"
+            return f"{SUPABASE_BUCKET}/{safe_dest}"
         else:
             print(f"WARN: Supabase storage upload failed: {res.status_code} {res.text}")
-            return f"local/{dest_path}"
+            return None
     except Exception as e:
         print(f"ERROR: Supabase storage upload exception: {e}")
-        return f"local/{dest_path}"
+        return None
 
 
 def get_storage_url(storage_path: str) -> str:

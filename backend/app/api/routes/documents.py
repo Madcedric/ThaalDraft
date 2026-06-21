@@ -34,41 +34,30 @@ async def upload_document(
     try:
         document_service.ensure_user_exists(user_id, user_email)
         
+        safe_filename = file.filename or os.path.basename(file_path) or "unnamed"
         filename = os.path.basename(file_path)
         dest_path = f"{int(time.time())}_{filename}"
         storage_path = storage_service.upload_file_to_supabase(file_path, dest_path)
+        if not storage_path:
+            storage_path = f"local/{int(time.time())}_{filename}"
+            logger.warning(f"Storage upload failed, using fallback path: {storage_path}")
 
-        safe_filename = file.filename or filename or "unnamed"
-
-        # Parse the document immediately during upload
-        parsed_json = {}
-        doc_status = "uploaded"
-        word_count = 0
+        # Parse immediately during upload so workspace has content
+        parsed_data = {}
         try:
-            parsed_json = parse_document(file_path)
-            doc_status = "parsed"
-            # Count words from parsed content
-            if isinstance(parsed_json, dict):
-                for section in parsed_json.get("sections", []):
-                    word_count += len(section.get("content", "").split())
-                if parsed_json.get("abstract"):
-                    word_count += len(str(parsed_json["abstract"]).split())
-            logger.info(f"PARSE: Document parsed successfully ({word_count} words)")
+            parsed_data = parse_document(file_path)
+            logger.info(f"PARSE: {safe_filename} → {len(parsed_data.get('sections', []))} sections")
         except Exception as parse_err:
-            logger.warning(f"PARSE: Initial parse failed, continuing with empty parsed_json: {parse_err}")
+            logger.error(f"PARSE ERROR during upload: {parse_err}")
 
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
-            "original_filename": safe_filename,
             "storage_path": storage_path,
-            "file_type": ext.lstrip(".") if ext else "unknown",
-            "status": doc_status,
+            "status": "parsed" if parsed_data.get("sections") else "uploaded",
             "size_bytes": size,
-            "file_size_bytes": size,
-            "word_count": word_count,
             "mode": mode,
-            "parsed_json": parsed_json
+            "parsed_json": parsed_data
         }
         created = document_service.create_document_record(doc_payload)
 
@@ -76,13 +65,13 @@ async def upload_document(
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
-        logger.info(f"UPLOAD: Document {doc_id} uploaded (mode={mode}, status={doc_status}, {size} bytes)")
+        logger.info(f"UPLOAD: Document {doc_id} uploaded & parsed (mode={mode}, {size} bytes, {len(parsed_data.get('sections', []))} sections)")
 
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
             storage_path=storage_path,
-            status=doc_status,
+            status="parsed" if parsed_data.get("sections") else "uploaded",
             size_bytes=size,
         )
     except HTTPException:
@@ -497,12 +486,13 @@ async def reconstruct_document(
     target_journal = doc.get("selected_journal") or "ieee"
     await notify("compliance", "running")
     try:
-        compliance_result = analyze_compliance(document_id, target_journal, parsed_data)
+        compliance_result = analyze_compliance(manuscript, target_journal)
         results["steps"]["compliance"] = {
             "status": "completed",
-            "score": compliance_result.score.overall if hasattr(compliance_result, 'score') else 0,
+            "score": compliance_result.get("score", {}).get("overall", 0),
+            "issues": len(compliance_result.get("issues", [])),
         }
-        await notify("compliance", "completed", f"Compliance: {results['steps']['compliance']['score']}%")
+        await notify("compliance", "completed", f"Compliance: {compliance_result.get('score', {}).get('overall', 0)}%")
     except Exception as e:
         results["steps"]["compliance"] = {"status": "failed", "error": str(e)}
         await notify("compliance", "failed", str(e))
@@ -520,17 +510,6 @@ async def reconstruct_document(
     except Exception as e:
         results["steps"]["review"] = {"status": "failed", "error": str(e)}
         await notify("review", "failed", str(e))
-
-    # Save all results to document
-    try:
-        updates = {"parsed_json": {**parsed_data, "reconstruction_results": results}}
-        if results["steps"].get("compliance", {}).get("status") == "completed":
-            updates["compliance_report"] = results["steps"]["compliance"]
-        if results["steps"].get("review", {}).get("status") == "completed":
-            updates["review_report"] = results["steps"]["review"]
-        document_service.update_document(document_id, updates)
-    except Exception as save_err:
-        logger.warning(f"Failed to save reconstruction results: {save_err}")
 
     await manager.broadcast_to_document(document_id, {
         "event": "job_completed",

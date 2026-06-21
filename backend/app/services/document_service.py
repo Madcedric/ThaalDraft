@@ -66,8 +66,15 @@ def create_document_record(doc: Dict) -> Dict:
     # Extract parsed_json from payload for normalized insertion
     parsed_json = doc.pop("parsed_json", {})
     doc.setdefault("mode", "reconstruction")
-    # Include parsed_json in the insert so get_document can return it
-    doc["parsed_json"] = parsed_json
+    
+    # Store parsed_json in the documents table too (source of truth for workspace)
+    if parsed_json:
+        doc["parsed_json"] = parsed_json
+    
+    # Ensure storage_path is never null (NOT NULL constraint)
+    if not doc.get("storage_path"):
+        doc["storage_path"] = f"local/{doc.get('filename', 'unknown')}"
+        print(f"WARN: storage_path was empty, using fallback: {doc['storage_path']}")
     
     doc_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/documents"
     try:
@@ -98,13 +105,14 @@ def create_document_record(doc: Dict) -> Dict:
                     s_payload = []
                     for idx, sec in enumerate(sections):
                         if isinstance(sec, dict):
+                            heading = sec.get("heading", "")
                             s_payload.append({
                                 "manuscript_id": manuscript_id,
-                                "heading": sec.get("heading", ""),
-                                "label": sec.get("heading", f"Section {idx+1}"),
-                                "content": sec.get("content", ""),
+                                "heading": heading,
+                                "label": heading.lower().replace(" ", "_")[:50] or f"section_{idx}",
                                 "section_order": idx,
-                                "level": sec.get("level", 1)
+                                "level": sec.get("level", 1),
+                                "content": sec.get("content", ""),
                             })
                     if s_payload:
                         s_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/sections"
@@ -114,11 +122,11 @@ def create_document_record(doc: Dict) -> Dict:
                 references = parsed_json.get("references", [])
                 if references:
                     r_payload = []
-                    for ref in references:
+                    for idx, ref in enumerate(references):
                         if isinstance(ref, str):
-                            r_payload.append({"manuscript_id": manuscript_id, "raw_text": ref})
+                            r_payload.append({"manuscript_id": manuscript_id, "ref_index": idx, "raw_text": ref})
                         elif isinstance(ref, dict):
-                            r_payload.append({"manuscript_id": manuscript_id, "raw_text": ref.get("raw_text", ""), "doi": ref.get("doi")})
+                            r_payload.append({"manuscript_id": manuscript_id, "ref_index": idx, "raw_text": ref.get("raw_text", ""), "doi": ref.get("doi")})
                     if r_payload:
                         r_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/references_table"
                         requests.post(r_url, json=r_payload, headers=headers, timeout=10)
@@ -144,30 +152,35 @@ def get_document(document_id: str) -> Optional[Dict]:
         if res.status_code == 200 and res.json():
             doc = res.json()[0]
             
-            # Use parsed_json directly from the document row
-            parsed_json = doc.get("parsed_json") or {}
+            # Prefer parsed_json from documents table (source of truth)
+            existing_pj = doc.get("parsed_json") or {}
+            if existing_pj and existing_pj.get("sections"):
+                return doc
             
-            # If parsed_json is empty, try to rebuild from normalized tables
-            if not parsed_json.get("sections"):
-                m_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/manuscripts?document_id=eq.{document_id}&select=*"
-                m_res = requests.get(m_url, headers=headers, timeout=10)
-                if m_res.status_code == 200 and m_res.json():
-                    manuscript = m_res.json()[0]
-                    manuscript_id = manuscript.get("id")
+            # Fall back to rebuilding from normalized tables
+            parsed_json = existing_pj.copy() if existing_pj else {}
+            m_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/manuscripts?document_id=eq.{document_id}&select=*"
+            m_res = requests.get(m_url, headers=headers, timeout=10)
+            if m_res.status_code == 200 and m_res.json():
+                manuscript = m_res.json()[0]
+                manuscript_id = manuscript.get("id")
+                
+                parsed_json["title"] = manuscript.get("title")
+                parsed_json["abstract"] = manuscript.get("abstract")
+                parsed_json["authors"] = manuscript.get("authors") or []
+                
+                s_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/sections?manuscript_id=eq.{manuscript_id}&order=section_order.asc&select=*"
+                s_res = requests.get(s_url, headers=headers, timeout=10)
+                if s_res.status_code == 200:
+                    parsed_json["sections"] = [
+                        {"heading": s.get("heading", ""), "content": s.get("content", ""), "level": s.get("level", 1)}
+                        for s in s_res.json()
+                    ]
                     
-                    parsed_json["title"] = manuscript.get("title")
-                    parsed_json["abstract"] = manuscript.get("abstract")
-                    parsed_json["authors"] = manuscript.get("authors") or []
-                    
-                    s_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/sections?manuscript_id=eq.{manuscript_id}&order=section_order.asc&select=*"
-                    s_res = requests.get(s_url, headers=headers, timeout=10)
-                    if s_res.status_code == 200:
-                        parsed_json["sections"] = s_res.json()
-                        
-                    r_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/references_table?manuscript_id=eq.{manuscript_id}&select=*"
-                    r_res = requests.get(r_url, headers=headers, timeout=10)
-                    if r_res.status_code == 200:
-                        parsed_json["references"] = [r.get("raw_text") for r in r_res.json()]
+                r_url = f"{SUPABASE_URL.rstrip('/')}/rest/v1/references_table?manuscript_id=eq.{manuscript_id}&select=*"
+                r_res = requests.get(r_url, headers=headers, timeout=10)
+                if r_res.status_code == 200:
+                    parsed_json["references"] = [r.get("raw_text") for r in r_res.json()]
             
             doc["parsed_json"] = parsed_json
             return doc
@@ -194,14 +207,16 @@ def update_document(document_id: str, patch: Dict) -> Optional[Dict]:
     parsed_json = patch.pop("parsed_json", None)
     
     try:
+        # Include parsed_json in the patch if provided
+        if parsed_json is not None:
+            patch["parsed_json"] = parsed_json
+        
         if patch:
             res = requests.patch(url, json=patch, headers=headers, timeout=10)
             if res.status_code not in (200, 204):
                 print(f"WARN: update_document failed: {res.status_code} {res.text}")
                 return None
         
-        # In Phase 1, we just fetch and return the updated document. Full deep-updates for normalized tables 
-        # (if sections/references change) will be implemented in subsequent phases.
         return get_document(document_id)
     except Exception as e:
         print(f"ERROR: update_document exception: {e}")

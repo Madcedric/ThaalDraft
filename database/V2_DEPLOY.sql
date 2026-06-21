@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   email TEXT UNIQUE NOT NULL,
   name TEXT,
   full_name TEXT,
+  display_name TEXT,
   photo_url TEXT,
+  avatar_url TEXT,
   provider TEXT DEFAULT 'firebase',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

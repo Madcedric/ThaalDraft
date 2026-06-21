@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
+import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -16,8 +17,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ThaalDraft",
-  description: "AI-Powered Manuscript Intelligence Platform",
+  title: "ThaalDraft — Manuscript Formatter",
+  description: "AI-Powered Manuscript Intelligence Platform for academic writing and publication",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -38,13 +44,15 @@ export default function RootLayout({
         >
           Skip to main content
         </a>
-        <ErrorBoundary>
-          <TooltipProvider>
-            <AuthProvider>
-              {children}
-            </AuthProvider>
-          </TooltipProvider>
-        </ErrorBoundary>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <ErrorBoundary>
+            <TooltipProvider>
+              <AuthProvider>
+                {children}
+              </AuthProvider>
+            </TooltipProvider>
+          </ErrorBoundary>
+        </ThemeProvider>
       </body>
     </html>
   );
