@@ -51,10 +51,10 @@ export function useSSE({ url, token, enabled = true, onEvent, onError }: UseSSEO
         }
       };
 
-      eventSource.onerror = (err) => {
+      eventSource.onerror = () => {
         setConnected(false);
         setError("Connection lost. Reconnecting...");
-        onError?.(err);
+        onError?.(new Event("error"));
         eventSource.close();
       };
     } catch (err) {
