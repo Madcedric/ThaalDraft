@@ -76,7 +76,7 @@ export default function DashboardPage() {
           console.warn("Failed to save journal selection");
         }
       }
-      router.push(`/dashboard/document/${result.id}`);
+      router.push(`/workspace/${result.id}`);
     } catch {
       // Error handled by useUpload
     }
@@ -221,7 +221,7 @@ export default function DashboardPage() {
                     {recentDocs.map((doc) => (
                       <Link
                         key={doc.id}
-                        href={`/dashboard/document/${doc.id}`}
+                        href={`/workspace/${doc.id}`}
                         className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors group"
                       >
                         <div className="flex items-center gap-3 min-w-0">
