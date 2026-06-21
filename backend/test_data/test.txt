@@ -1,0 +1,22 @@
+Deep Learning for Medical Image Segmentation
+
+Authors: John Doe, Jane Smith
+
+Abstract
+This paper presents a comprehensive survey of deep learning approaches for medical image segmentation.
+
+1. Introduction
+Medical image segmentation is a critical task in clinical practice.
+
+2. Methodology
+We reviewed papers from 2015-2024 using CNN and Transformer architectures.
+
+3. Results
+Deep learning methods achieve state-of-the-art results on multiple benchmarks.
+
+4. Conclusion
+Future work should address generalization and data efficiency.
+
+References
+[1] Ronneberger et al., U-Net, 2015
+[2] Chen et al., TransUNet, 2021

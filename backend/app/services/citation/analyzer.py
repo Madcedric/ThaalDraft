@@ -21,10 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def analyze_citations(
-    structured_json: Dict[str, Any],
+    structured_json,
     document_id: str = "",
     resolve_dois: bool = False,
 ) -> CitationReport:
+    if hasattr(structured_json, 'model_dump'):
+        structured_json = structured_json.model_dump()
+
     start_time = time.time()
     api_calls = 0
 

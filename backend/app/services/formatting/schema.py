@@ -16,6 +16,7 @@ class FormatType(str, Enum):
 class ExportType(str, Enum):
     DOCX = "docx"
     PDF = "pdf"
+    LATEX = "latex"
 
 
 class FontConfig(BaseModel):
