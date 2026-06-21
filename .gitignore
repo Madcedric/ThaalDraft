@@ -39,3 +39,6 @@ yarn-error.log*
 # Testing
 coverage/
 .pytest_cache/
+
+# Submission packages (generated locally)
+backend/submission_packages/
