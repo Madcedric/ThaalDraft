@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.post("/upload", response_model=DocumentMeta)
 async def upload_document(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload a document and parse it. Heavy analyses (citations, compliance, review) run on-demand."""
+    """Upload a document and enqueue a parse job."""
     file_path = await save_upload_file(file)
     size = os.path.getsize(file_path)
     ext = get_file_extension(file_path)
@@ -28,29 +28,21 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
     user_email = current_user.get("email", "")
 
     try:
+        document_service.ensure_user_exists(user_id, user_email)
+        
         filename = os.path.basename(file_path)
         dest_path = f"{int(time.time())}_{filename}"
         storage_path = storage_service.upload_file_to_supabase(file_path, dest_path)
 
-        parsed_data = parse_document(file_path)
-
         safe_filename = file.filename or filename or "unnamed"
-
-        document_service.ensure_user_exists(user_id, user_email)
-
-        file_ext = ext.lstrip(".")
-        structured_data = struct_service.normalize_classification(parsed_data, file_type=file_ext)
-
-        manuscript = build_manuscript(structured_data)
-        structured_data["manuscript_model"] = manuscript.model_dump()
 
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
             "storage_path": storage_path,
-            "status": "structured",
+            "status": "uploaded",
             "size_bytes": size,
-            "parsed_json": structured_data,
+            "parsed_json": {}
         }
         created = document_service.create_document_record(doc_payload)
 
@@ -58,14 +50,23 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
-        logger.info(f"UPLOAD: Document {doc_id} uploaded and parsed ({size} bytes)")
+        # Create parse job
+        job_payload = {
+            "document_id": doc_id,
+            "job_type": "parse",
+            "status": "queued",
+            "payload": {"file_path": file_path, "file_ext": ext.lstrip(".")}
+        }
+        job_service.create_job(job_payload)
+
+        logger.info(f"UPLOAD: Document {doc_id} uploaded and parse job queued ({size} bytes)")
 
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
-            storage_path=created.get("storage_path"),
-            status="structured",
-            size_bytes=created.get("size_bytes"),
+            storage_path=storage_path,
+            status="uploaded",
+            size_bytes=size,
         )
     except HTTPException:
         raise
@@ -347,8 +348,8 @@ async def enqueue_job(document_id: str, payload: dict, current_user: dict = Depe
         
         job_payload = {
             "document_id": document_id,
-            "type": job_type,
-            "status": "pending",
+            "job_type": job_type,
+            "status": "queued",
             "payload": payload.get("payload", {})
         }
         created = job_service.create_job(job_payload)

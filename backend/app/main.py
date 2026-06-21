@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 # Load .env file from backend root
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app.api.routes import documents, health, auth, exports, citations, compliance, reviewer, formatting, batch, submission
+from app.api.routes import documents, health, auth, exports, citations, compliance, reviewer, formatting, batch, submission, websockets
 
 app = FastAPI(title="ThaalDraft API", version="0.1.0")
 
@@ -34,6 +34,7 @@ app.include_router(reviewer.router, prefix="/api/v1/documents", tags=["Reviewer"
 app.include_router(formatting.router, prefix="/api/v1/documents", tags=["Formatting"])
 app.include_router(batch.router, prefix="/api/v1", tags=["Batch"])
 app.include_router(submission.router, prefix="/api/v1/documents", tags=["Submission"])
+app.include_router(websockets.router, prefix="", tags=["WebSockets"])
 
 @app.get("/")
 def root():
