@@ -1,11 +1,10 @@
 # ThaalDraft
 
-ThaalDraft is an AI-powered academic document formatting application. It allows researchers and authors to instantly convert unstructured, raw DOCX manuscripts into camera-ready templates complying with major academic journals (e.g., IEEE, ACM, APA, and Nature).
+### AI-Powered Manuscript Reconstruction & Journal Formatting Platform
 
-This repository is split into:
+ThaalDraft transforms raw research documents into publication-ready manuscripts.
 
-- `/frontend`: A Next.js 15 web application.
-- `/backend`: A FastAPI python application handling structure parsing and document formatting.
+Instead of only changing fonts and layouts, ThaalDraft reconstructs document structure, validates citations, performs compliance checks, reviews manuscript quality, and formats papers into journal-specific templates.
 
 ---
 
@@ -31,10 +30,92 @@ sequenceDiagram
     Frontend-->>User: Download File / Show Dashboard
 ```
 
-### Key Security Features
+## Problem
 
-1. **JWT Verification**: The backend verifies token signatures using Google's public certificates fetched dynamically and cached according to the certificate API's `Cache-Control` header.
-2. **Client-Side Route Guarding**: Automatic redirects secure the dashboard. Anonymous users trying to hit `/dashboard` are routed to `/login`, and authenticated users trying to hit `/login` are routed back to the `/dashboard`.
+Researchers frequently work with:
+
+- Unstructured DOCX drafts
+- Poorly formatted PDFs
+- Missing citations and DOI metadata
+- Journal-specific formatting requirements
+
+Manual formatting is time-consuming and error-prone.
+
+ThaalDraft automates the entire workflow.
+
+---
+
+## Core Features
+
+### Reconstruction Mode
+
+Convert raw documents into structured manuscripts.
+
+- DOCX ZIP/XML extraction
+- PDF text extraction
+- Figure and table detection
+- Section reconstruction
+- Canonical manuscript generation
+
+### Formatting Studio
+
+Supported formats:
+
+- IEEE
+- Elsevier
+- Custom Templates
+
+Upcoming:
+
+- Springer
+- ACM
+- Nature
+- APA
+- MLA
+
+### Reviewer AI
+
+AI-assisted manuscript evaluation:
+
+- Writing quality analysis
+- Research quality assessment
+- Missing section detection
+- Publication readiness review
+
+### DOI Intelligence
+
+Powered by:
+
+- CrossRef
+- OpenAlex
+- Semantic Scholar
+
+Features:
+
+- DOI validation
+- Metadata enrichment
+- Citation verification
+- Reference correction
+
+### Compliance Engine
+
+Checks:
+
+- Journal requirements
+- Section completeness
+- Reference quality
+- Formatting compliance
+
+### Submission Package
+
+Generate:
+
+- Formatted Manuscript
+- Reviewer Report
+- Compliance Report
+- DOI Report
+- Cover Letter
+- Conflict Statement
 
 ---
 
@@ -100,25 +181,105 @@ NEXT_PUBLIC_FIREBASE_APP_ID=your-app-id
 
 ---
 
-## 📦 Tech Stack Summary
+## Architecture
 
-### Frontend:
+```mermaid
+flowchart LR
 
-- **Core Framework**: Next.js 15 (using App Router)
-- **Styling**: TailwindCSS, custom CSS system
-- **Animations**: Framer Motion (for fluid login transitions, drag & drop states)
-- **Authentication**: Firebase Client SDK
+A[Upload] --> B[Extraction]
 
-### Backend:
+B --> C[DOCX ZIP/XML]
+B --> D[PDF NLP/OCR]
 
-- **API Framework**: FastAPI (Python)
-- **Document Processing**: python-docx, lxml
-- **Security & Tokens**: PyJWT, cryptography
+C --> E[Canonical Manuscript]
+D --> E
+
+E --> F[AI Analysis]
+
+F --> G[Reviewer AI]
+F --> H[Compliance]
+F --> I[DOI Intelligence]
+
+G --> J[Formatting Studio]
+H --> J
+I --> J
+
+J --> K[LaTeX Engine]
+
+K --> L[Preview]
+L --> M[Submission Package]
+```
 
 ---
 
-## Phase 1 — Architecture & Setup (Completed)
+## Technology Stack
 
-- Added `ARCHITECTURE.md` describing services, data flow, and next steps.
-- Added env example templates: `backend/.env.example` and `frontend/.env.example`.
-- Added a lightweight health API at `/api/v1/health/` with liveness and readiness endpoints.
+### Frontend
+
+- Next.js 15
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+
+### Backend
+
+- FastAPI
+- Python
+
+### AI & NLP
+
+- Gemini
+- DeepSeek
+- spaCy
+- Sentence Transformers
+
+### Citation Intelligence
+
+- CrossRef
+- OpenAlex
+- Semantic Scholar
+
+### Database
+
+- PostgreSQL
+- Supabase
+
+### Authentication
+
+- Firebase Authentication
+
+### Formatting
+
+- LaTeX
+- IEEE Templates
+- Elsevier Templates
+- Custom Journal Templates
+
+---
+
+## Project Structure
+
+```text
+ThaalDraft/
+│
+├── frontend/
+│   └── Next.js Application
+│
+├── backend/
+│   └── FastAPI Services
+│
+├── docs/
+│   ├── ARCHITECTURE_V2.md
+│   ├── PRD_V2.md
+│   ├── UI_UX_V2.md
+│   └── ROADMAP_V2.md
+│
+└── database/
+    └── DATABASE_SCHEMA_V2.sql
+```
+
+---
+
+## Vision
+
+Build a complete manuscript intelligence platform capable of transforming raw academic drafts into publication-ready journal submissions with minimal manual effort.
