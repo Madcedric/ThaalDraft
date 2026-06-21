@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Activity, BookOpen, AlertCircle, CheckCircle2, Download, FileText, Loader2, Send } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, BookOpen, AlertCircle, CheckCircle2, Download, FileText, Loader2, Send, Package } from 'lucide-react';
 
 interface AnalysisPaneProps {
   healthScore: number;
@@ -41,6 +41,8 @@ export function AnalysisPane({
   const [selectedTemplate, setSelectedTemplate] = useState('ieee');
   const [isExporting, setIsExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [isBuildingSubmission, setIsBuildingSubmission] = useState(false);
+  const [submissionBuilt, setSubmissionBuilt] = useState(false);
 
   const handleExport = async (format: string) => {
     if (!documentId) return;
@@ -84,6 +86,59 @@ export function AnalysisPane({
       setExportMessage(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleBuildSubmission = async () => {
+    if (!documentId) return;
+    setIsBuildingSubmission(true);
+    setExportMessage(null);
+    try {
+      const token = localStorage.getItem('firebase_id_token') || sessionStorage.getItem('firebase_id_token');
+      if (!token) { setExportMessage('Not authenticated'); return; }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/submission/build`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            journal_id: selectedTemplate,
+            template_id: selectedTemplate,
+            components: ['manuscript_docx', 'compliance_report', 'review_report', 'citation_report', 'cover_letter', 'author_statement', 'conflict_statement'],
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Build failed');
+      }
+
+      setSubmissionBuilt(true);
+      setExportMessage('Submission package built!');
+
+      // Auto-download ZIP
+      const zipResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000'}/api/v1/documents/${documentId}/submission/download-zip`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (zipResponse.ok) {
+        const blob = await zipResponse.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${documentId}_submission.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (err: unknown) {
+      setExportMessage(err instanceof Error ? err.message : 'Build failed');
+    } finally {
+      setIsBuildingSubmission(false);
     }
   };
 
@@ -243,11 +298,26 @@ export function AnalysisPane({
 
             {/* Submit to Journal */}
             <button
-              disabled={!documentId}
+              onClick={handleBuildSubmission}
+              disabled={!documentId || isBuildingSubmission}
               className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
             >
-              <Send className="w-4 h-4" />
-              Submit to Journal
+              {isBuildingSubmission ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Building Package...
+                </>
+              ) : submissionBuilt ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" />
+                  Package Ready
+                </>
+              ) : (
+                <>
+                  <Package className="w-4 h-4" />
+                  Build Submission Package
+                </>
+              )}
             </button>
           </>
         )}

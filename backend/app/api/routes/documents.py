@@ -18,8 +18,12 @@ router = APIRouter()
 
 
 @router.post("/upload", response_model=DocumentMeta)
-async def upload_document(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload a document and enqueue a parse job."""
+async def upload_document(
+    file: UploadFile = File(...),
+    mode: str = Form("reconstruction"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload a document. Mode: 'reconstruction' (full pipeline) or 'formatting' (skip to format)."""
     file_path = await save_upload_file(file)
     size = os.path.getsize(file_path)
     ext = get_file_extension(file_path)
@@ -42,6 +46,7 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
             "storage_path": storage_path,
             "status": "uploaded",
             "size_bytes": size,
+            "mode": mode,
             "parsed_json": {}
         }
         created = document_service.create_document_record(doc_payload)
@@ -55,11 +60,11 @@ async def upload_document(file: UploadFile = File(...), current_user: dict = Dep
             "document_id": doc_id,
             "job_type": "parse",
             "status": "queued",
-            "payload": {"file_path": file_path, "file_ext": ext.lstrip(".")}
+            "payload": {"file_path": file_path, "file_ext": ext.lstrip("."), "mode": mode}
         }
         job_service.create_job(job_payload)
 
-        logger.info(f"UPLOAD: Document {doc_id} uploaded and parse job queued ({size} bytes)")
+        logger.info(f"UPLOAD: Document {doc_id} uploaded (mode={mode}), parse job queued ({size} bytes)")
 
         return DocumentMeta(
             id=str(doc_id),

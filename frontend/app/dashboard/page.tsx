@@ -60,7 +60,7 @@ export default function DashboardPage() {
     if (!file || !user) return;
 
     try {
-      const result = await upload(file);
+      const result = await upload(file, uploadMode || "reconstruction");
       if (selectedJournal) {
         try {
           const token = await user.getIdToken();
