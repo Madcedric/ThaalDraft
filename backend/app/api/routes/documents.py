@@ -40,17 +40,35 @@ async def upload_document(
 
         safe_filename = file.filename or filename or "unnamed"
 
+        # Parse the document immediately during upload
+        parsed_json = {}
+        doc_status = "uploaded"
+        word_count = 0
+        try:
+            parsed_json = parse_document(file_path)
+            doc_status = "parsed"
+            # Count words from parsed content
+            if isinstance(parsed_json, dict):
+                for section in parsed_json.get("sections", []):
+                    word_count += len(section.get("content", "").split())
+                if parsed_json.get("abstract"):
+                    word_count += len(str(parsed_json["abstract"]).split())
+            logger.info(f"PARSE: Document parsed successfully ({word_count} words)")
+        except Exception as parse_err:
+            logger.warning(f"PARSE: Initial parse failed, continuing with empty parsed_json: {parse_err}")
+
         doc_payload = {
             "user_id": user_id,
             "filename": safe_filename,
             "original_filename": safe_filename,
             "storage_path": storage_path,
             "file_type": ext.lstrip(".") if ext else "unknown",
-            "status": "uploaded",
+            "status": doc_status,
             "size_bytes": size,
             "file_size_bytes": size,
+            "word_count": word_count,
             "mode": mode,
-            "parsed_json": {}
+            "parsed_json": parsed_json
         }
         created = document_service.create_document_record(doc_payload)
 
@@ -58,22 +76,13 @@ async def upload_document(
         if not doc_id:
             raise HTTPException(status_code=500, detail="Failed to create document record: no ID returned")
 
-        # Create parse job
-        job_payload = {
-            "document_id": doc_id,
-            "job_type": "parse",
-            "status": "queued",
-            "payload": {"file_path": file_path, "file_ext": ext.lstrip("."), "mode": mode}
-        }
-        job_service.create_job(job_payload)
-
-        logger.info(f"UPLOAD: Document {doc_id} uploaded (mode={mode}), parse job queued ({size} bytes)")
+        logger.info(f"UPLOAD: Document {doc_id} uploaded (mode={mode}, status={doc_status}, {size} bytes)")
 
         return DocumentMeta(
             id=str(doc_id),
             filename=safe_filename,
             storage_path=storage_path,
-            status="uploaded",
+            status=doc_status,
             size_bytes=size,
         )
     except HTTPException:
@@ -414,7 +423,18 @@ async def reconstruct_document(
 
     async def notify(step: str, status: str, message: str = ""):
         try:
-            await manager.broadcast_to_document(document_id, {
+    # Save all results to document
+    try:
+        updates = {"parsed_json": {**parsed_data, "reconstruction_results": results}}
+        if results["steps"].get("compliance", {}).get("status") == "completed":
+            updates["compliance_report"] = results["steps"]["compliance"]
+        if results["steps"].get("review", {}).get("status") == "completed":
+            updates["review_report"] = results["steps"]["review"]
+        document_service.update_document(document_id, updates)
+    except Exception as save_err:
+        logger.warning(f"Failed to save reconstruction results: {save_err}")
+
+    await manager.broadcast_to_document(document_id, {
                 "event": "reconstruction_progress",
                 "step": step,
                 "status": status,
@@ -488,13 +508,12 @@ async def reconstruct_document(
     target_journal = doc.get("selected_journal") or "ieee"
     await notify("compliance", "running")
     try:
-        compliance_result = analyze_compliance(manuscript, target_journal)
+        compliance_result = analyze_compliance(document_id, target_journal, parsed_data)
         results["steps"]["compliance"] = {
             "status": "completed",
-            "score": compliance_result.get("score", {}).get("overall", 0),
-            "issues": len(compliance_result.get("issues", [])),
+            "score": compliance_result.score.overall if hasattr(compliance_result, 'score') else 0,
         }
-        await notify("compliance", "completed", f"Compliance: {compliance_result.get('score', {}).get('overall', 0)}%")
+        await notify("compliance", "completed", f"Compliance: {results['steps']['compliance']['score']}%")
     except Exception as e:
         results["steps"]["compliance"] = {"status": "failed", "error": str(e)}
         await notify("compliance", "failed", str(e))
