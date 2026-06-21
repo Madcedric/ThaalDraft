@@ -391,3 +391,34 @@ values
 ('mla', 'MLA', 'MLA academic format', 1, 2.0, 'mla', 'author_page', 'arabic', 'A4'),
 ('nature', 'Nature', 'Nature journal format', 1, 1.0, 'numeric', 'numeric', 'arabic', 'A4')
 on conflict (id) do nothing;
+
+-- ============================================================
+-- BATCH FILES
+-- ============================================================
+create table if not exists public.batch_files (
+  id uuid primary key default gen_random_uuid(),
+  batch_job_id uuid not null references public.batch_jobs(id) on delete cascade,
+  filename text not null,
+  status text not null default 'pending',
+  file_size bigint,
+  document_id uuid references public.documents(id) on delete set null,
+  error text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_batch_files_batch_job_id on public.batch_files(batch_job_id);
+
+-- ============================================================
+-- CUSTOM TEMPLATES
+-- ============================================================
+create table if not exists public.custom_templates (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  template_id text not null unique,
+  template_name text not null,
+  template_config jsonb not null default '{}'::jsonb,
+  base_template_id text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_custom_templates_user_id on public.custom_templates(user_id);
